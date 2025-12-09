@@ -65,7 +65,7 @@ export function generateICalendar(events: CalendarEvent[], members: FamilyMember
     if (event.memberIds && event.memberIds.length > 0) {
       const memberNames = event.memberIds
         .map(id => memberMap.get(id))
-        .filter(Boolean)
+        .filter((name): name is string => name !== undefined)
         .join(', ')
       description = `Family Members: ${memberNames}`
       
@@ -84,7 +84,7 @@ export function generateICalendar(events: CalendarEvent[], members: FamilyMember
     if (event.memberIds && event.memberIds.length > 0) {
       const categories = event.memberIds
         .map(id => memberMap.get(id))
-        .filter(Boolean)
+        .filter((name): name is string => name !== undefined)
         .map(name => escapeICalText(name))
         .join(',')
       if (categories) {
@@ -117,6 +117,7 @@ function formatICalDateTime(date: Date): string {
 
 /**
  * Format a Date object as iCalendar date (YYYYMMDD)
+ * Note: Uses local time (not UTC) as per iCalendar spec for all-day events (VALUE=DATE)
  */
 function formatICalDate(date: Date): string {
   const year = date.getFullYear()
