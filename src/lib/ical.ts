@@ -70,7 +70,7 @@ export function generateICalendar(events: CalendarEvent[], members: FamilyMember
       description = `Family Members: ${memberNames}`
       
       if (event.description) {
-        description += `\\n\\n${event.description}`
+        description += `\n\n${event.description}`
       }
     } else if (event.description) {
       description = event.description
@@ -130,7 +130,18 @@ function formatICalDate(date: Date): string {
  * Combine date and time string (HH:mm) into a Date object
  */
 function combineDateTime(date: Date, timeStr: string): Date {
-  const [hours, minutes] = timeStr.split(':').map(Number)
+  const parts = timeStr.split(':')
+  if (parts.length !== 2) {
+    throw new Error(`Invalid time format: ${timeStr}. Expected HH:mm format.`)
+  }
+  
+  const hours = parseInt(parts[0], 10)
+  const minutes = parseInt(parts[1], 10)
+  
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    throw new Error(`Invalid time values: ${timeStr}. Hours must be 0-23, minutes must be 0-59.`)
+  }
+  
   const combined = new Date(date)
   combined.setHours(hours, minutes, 0, 0)
   return combined
