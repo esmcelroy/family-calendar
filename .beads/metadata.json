@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "family_calendar",
+  "project_id": "67d10679-a643-45af-9fb5-b88b28177038"
+}
