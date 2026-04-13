@@ -89,7 +89,7 @@ export function generateICalendar(events: CalendarEvent[], members: FamilyMember
       const categories = event.memberIds
         .map(id => memberMap.get(id))
         .filter((name): name is string => name !== undefined)
-        .map(name => escapeICalText(name))
+        .map(name => name.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/\n/g, '\\n'))
         .join(',')
       if (categories) {
         lines.push(`CATEGORIES:${categories}`)
