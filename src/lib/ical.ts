@@ -41,7 +41,11 @@ export function generateICalendar(events: CalendarEvent[], members: FamilyMember
       lines.push(`DTSTART:${formatICalDateTime(startDateTime)}`)
       
       if (event.endTime) {
-        const endDateTime = combineDateTime(eventDate, event.endTime)
+        let endDateTime = combineDateTime(eventDate, event.endTime)
+        // If end time is before start time, assume it's the next day
+        if (endDateTime < startDateTime) {
+          endDateTime.setDate(endDateTime.getDate() + 1)
+        }
         lines.push(`DTEND:${formatICalDateTime(endDateTime)}`)
       } else {
         // Default to 1 hour duration if no end time
