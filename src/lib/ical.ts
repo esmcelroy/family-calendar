@@ -162,7 +162,9 @@ function escapeICalText(text: string): string {
 }
 
 /**
- * Download iCalendar file
+ * Downloads an iCalendar file to the user's device
+ * @param content - The iCalendar formatted string to download
+ * @param filename - The name of the file to download (default: 'family-calendar.ics')
  */
 export function downloadICalendar(content: string, filename: string = 'family-calendar.ics'): void {
   const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' })
