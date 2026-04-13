@@ -126,3 +126,62 @@ Work is **not complete** until committed and pushed. Before ending a session:
    git push
    ```
 5. Verify `git status` shows "up to date with origin"
+
+## Project Conventions
+
+### Source layout
+
+```
+src/
+├── components/          # Feature components (PascalCase.tsx)
+│   └── ui/              # shadcn/ui primitives — do not edit directly
+├── hooks/               # Custom React hooks (kebab-case.ts, prefixed use-)
+├── lib/
+│   ├── types.ts         # All shared TypeScript interfaces (single file)
+│   ├── calendar.ts      # Calendar domain utilities
+│   └── utils.ts         # General utilities (includes `cn()` helper)
+└── styles/              # Global CSS and theme tokens
+```
+
+### Naming conventions
+
+| Thing | Convention | Example |
+|-------|-----------|---------|
+| Feature components | PascalCase file + export | `CalendarGrid.tsx` |
+| `ui/` primitives | kebab-case file, PascalCase export | `button.tsx` → `Button` |
+| Custom hooks | kebab-case, `use-` prefix | `use-mobile.ts` |
+| Utility & type files | kebab-case | `calendar.ts`, `types.ts` |
+| CSS files | kebab-case | `theme.css` |
+
+### TypeScript patterns
+- Domain interfaces live in `src/lib/types.ts` — add new ones there, do not scatter them
+- Use `interface` for domain models (e.g. `CalendarEvent`, `FamilyMember`)
+- Inline `Props` interface per component file is fine
+- Strict null checks are on — never cast away `null`/`undefined`
+- All components are functional; no class components
+
+### Import path aliases
+Use the `@/` alias for all non-relative imports:
+```ts
+import { CalendarEvent } from '@/lib/types'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { useIsMobile } from '@/hooks/use-mobile'
+```
+
+### Styling
+- Use **Tailwind utility classes** for all styling — no custom CSS unless adding a design token
+- Use `cn()` from `@/lib/utils` to merge conditional Tailwind classes
+- Use `cva` (class-variance-authority) for components with multiple variants
+- Icons: **`@phosphor-icons/react` only** — do not use Lucide or Heroicons
+
+### State management
+- `useKV` (from `@github/spark/hooks`) is the source of truth for **persistent** state — do not duplicate with `useState`
+- Use React hooks (`useState`, `useEffect`) for transient/local UI state
+- `@tanstack/react-query` for async data fetching
+
+### Key runtime libraries
+- Date handling: `date-fns`
+- Form management: `react-hook-form` + `zod`
+- Unique IDs: `uuid`
+- iCalendar parsing: `ical.js`
