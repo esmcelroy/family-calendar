@@ -117,7 +117,8 @@ function App() {
       toast.success('Calendar exported successfully')
     } catch (error) {
       console.error('Error exporting calendar:', error)
-      toast.error('Failed to export calendar')
+      const message = error instanceof Error ? error.message : 'Failed to export calendar'
+      toast.error(`Export failed: ${message}`)
     }
   }
 
