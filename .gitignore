@@ -32,3 +32,8 @@ pids
 .devcontainer/
 
 .spark-workbench-id
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
