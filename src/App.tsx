@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useKV } from '@github/spark/hooks'
+import { useLocalStorage } from '@/hooks/use-local-storage'
+import { STORAGE_KEYS } from '@/lib/storage'
 import { CalendarEvent, FamilyMember } from '@/lib/types'
 import { CalendarGrid } from '@/components/CalendarGrid'
 import { EventDialog } from '@/components/EventDialog'
@@ -14,8 +15,8 @@ import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 function App() {
-  const [events, setEvents] = useKV<CalendarEvent[]>('family-events', [])
-  const [members, setMembers] = useKV<FamilyMember[]>('family-members', [])
+  const [events, setEvents] = useLocalStorage<CalendarEvent[]>(STORAGE_KEYS.events, [])
+  const [members, setMembers] = useLocalStorage<FamilyMember[]>(STORAGE_KEYS.members, [])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showEventDialog, setShowEventDialog] = useState(false)
