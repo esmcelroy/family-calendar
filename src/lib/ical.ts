@@ -148,7 +148,7 @@ function combineDateTime(date: Date, timeStr: string): Date {
   }
   
   const combined = new Date(date)
-  combined.setHours(hours, minutes, 0, 0)
+  combined.setUTCHours(hours, minutes, 0, 0)
   return combined
 }
 
