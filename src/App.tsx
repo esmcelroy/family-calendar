@@ -7,7 +7,8 @@ import { EventDetailsDialog } from '@/components/EventDetailsDialog'
 import { FamilyMembersSheet } from '@/components/FamilyMembersSheet'
 import { Button } from '@/components/ui/button'
 import { formatMonthYear } from '@/lib/calendar'
-import { Plus, CaretLeft, CaretRight, Users, CalendarBlank, Funnel } from '@phosphor-icons/react'
+import { generateICalendar, downloadICalendar } from '@/lib/ical'
+import { Plus, CaretLeft, CaretRight, Users, CalendarBlank, Funnel, Download } from '@phosphor-icons/react'
 import { Toaster, toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -104,6 +105,23 @@ function App() {
     )
   }
 
+  const handleExportICalendar = () => {
+    if (!events || events.length === 0) {
+      toast.error('No events to export')
+      return
+    }
+    
+    try {
+      const icalContent = generateICalendar(events, members || [])
+      downloadICalendar(icalContent)
+      toast.success('Calendar exported successfully')
+    } catch (error) {
+      console.error('Error exporting calendar:', error)
+      const message = error instanceof Error ? error.message : 'Failed to export calendar'
+      toast.error(`Export failed: ${message}`)
+    }
+  }
+
   const hasNoEvents = (events || []).length === 0
   const hasNoMembers = (members || []).length === 0
 
@@ -119,6 +137,15 @@ function App() {
             <Button variant="outline" className="gap-2" onClick={() => setShowMembersSheet(true)}>
               <Users size={20} />
               <span className="hidden sm:inline">Family</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              className="gap-2" 
+              onClick={handleExportICalendar}
+              disabled={hasNoEvents}
+            >
+              <Download size={20} />
+              <span className="hidden sm:inline">Export</span>
             </Button>
             <Button className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => {
               setSelectedDate(new Date())
