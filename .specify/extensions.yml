@@ -1,0 +1,56 @@
+# Speckit Extension Hooks
+# Defines how beads integrates with speckit across the feature lifecycle.
+
+hooks:
+
+  # --- After /speckit.plan ---
+  # Once the plan.md is written, create a beads epic for the feature
+  # and child issues for each grouped phase of work.
+  after_plan:
+    - extension: beads
+      command: beads.sync-plan
+      description: >
+        Create beads issues to track the implementation plan.
+        One top-level epic per feature, one issue per phase/group of tasks,
+        with dependencies wired to match the plan's ordering.
+      optional: false
+      prompt: |
+        Now that plan.md has been written for this feature, create beads issues to track it.
+
+        Steps:
+        1. Create a parent epic issue:
+           bd create --title="[feature name]: ICS Calendar Subscriptions" \
+             --description="Track all implementation work for feature 001-ics-calendar-subscriptions. Spec: specs/001-ics-calendar-subscriptions/spec.md" \
+             --type=feature --priority=2
+
+        2. For each Phase in the plan's task structure (Phase 1 Setup, Phase 2 Foundational,
+           Phase 3 User Story 1, Phase 4 User Story 2, Phase 5 User Story 3), create a
+           child issue:
+           bd create --title="[Phase title]" \
+             --description="[Phase description and tasks from plan.md]" \
+             --type=task --priority=[phase priority: P1 phases = 1, P2 = 2, P3 = 3]
+
+        3. Wire dependencies so later phases block on earlier ones:
+           bd dep add <phase-2-id> <phase-1-id>
+           bd dep add <phase-3-id> <phase-2-id>
+           # etc.
+
+        4. Push beads to remote:
+           bd dolt push
+
+  # --- After /speckit.tasks ---
+  # After tasks.md is generated (granular task list), sync individual tasks as issues.
+  after_tasks:
+    - extension: beads
+      command: beads.sync-tasks
+      description: >
+        Create granular beads issues for each task in tasks.md,
+        replacing the phase-level issues created by after_plan.
+      optional: true
+      prompt: |
+        tasks.md has been generated. Optionally sync granular tasks as beads issues.
+        For each unchecked task in tasks.md:
+          bd create --title="T###: [task description]" \
+            --description="From tasks.md for feature 001-ics-calendar-subscriptions" \
+            --type=task --priority=2
+        Then push: bd dolt push
