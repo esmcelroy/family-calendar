@@ -43,19 +43,19 @@ export function useLocalStorage<T>(
   }, [key, value, adapter])
 
   // Cross-tab sync: listen for storage events from other tabs/windows.
+  // Note: StorageEvent only fires for window.localStorage changes, so this
+  // is inherently localStorage-specific and is intentionally a no-op for
+  // alternative adapter implementations (e.g. PostgresAdapter in spec 011).
   useEffect(() => {
     const handler = (e: StorageEvent) => {
-      if (e.key !== key || e.newValue === null) return
-      try {
-        setValue(JSON.parse(e.newValue) as T)
-      } catch {
-        setValue(defaultValue)
-      }
+      if (e.key !== key) return
+      // Re-read via the adapter for consistent parsing and error handling.
+      setValue(adapter.get(key, defaultValue))
     }
 
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
-  }, [key, defaultValue])
+  }, [key, defaultValue, adapter])
 
   return [value, setValue]
 }
