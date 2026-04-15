@@ -83,13 +83,13 @@ The app needs a way to actually send email. For families with a home server or d
 
 **Why this priority**: Without a transport, invitations can't be sent. The mailto fallback ensures the feature works for all users with no infrastructure.
 
-**Independent Test (mailto fallback)**: With no SMTP configured, create an event with an assigned member. The app should open a `mailto:` link pre-addressed to the member with the `.ics` file content in the email body or as an attachment, ready for the organiser to send manually.
+**Independent Test (mailto fallback)**: With no SMTP configured, create an event with an assigned member. The app should open a `mailto:` link pre-addressed to the member with the iCalendar (`.ics`) content placed in the email body, plus clear instructions that the organiser must review and send it manually. Attaching an `.ics` file via `mailto:` is out of scope for browser-based delivery.
 
 **Independent Test (SMTP)**: Configure a valid SMTP server (e.g., Gmail App Password, Mailgun SMTP). Create an event. The email should arrive in the recipient's inbox within 60 seconds without any manual action from the organiser.
 
 **Acceptance Scenarios**:
 
-1. **Given** no SMTP server is configured, **When** an invitation needs to be sent, **Then** the app opens a `mailto:` link in the organiser's default email client with the recipient pre-filled and the `.ics` content available to send.
+1. **Given** no SMTP server is configured, **When** an invitation needs to be sent, **Then** the app opens a `mailto:` link in the organiser's default email client with the recipient pre-filled, the iCalendar (`.ics`) content included in the email body, and clear instructions for the organiser to send it manually; attaching files via `mailto:` is not required.
 2. **Given** an SMTP server is configured (host, port, username, password), **When** an invitation needs to be sent, **Then** the app sends the email automatically via the configured SMTP server without organiser intervention.
 3. **Given** the SMTP configuration is invalid or the server is unreachable, **When** sending fails, **Then** the app surfaces a clear error with the option to retry or fall back to the `mailto:` method.
 4. **Given** a user opens app settings, **When** they navigate to the "Email / Delivery" section, **Then** they can enter and save SMTP credentials, test the connection, and see the current delivery transport status.
