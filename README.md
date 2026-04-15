@@ -26,7 +26,7 @@ Family Calendar is a lightweight shared calendar for households. It focuses on q
 
 ### Prerequisites
 
-- Node.js
+- Node.js 20.19+ (or 22.12+)
 - npm
 
 ### Install
