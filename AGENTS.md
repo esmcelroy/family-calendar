@@ -52,7 +52,8 @@ bd close <id>         # Complete work
 
 ### Rules
 
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Use `bd` for ALL agent task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- `bd` works **alongside** GitHub Issues (user-facing bugs/features) and speckit (spec/planning artifacts) — track work in all three as appropriate
 - Run `bd prime` for detailed command reference and session close protocol
 - Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
