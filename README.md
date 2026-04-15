@@ -48,6 +48,8 @@ npm run dev
 npm run build
 npm run lint
 npm run preview
+npm run kill
+npm run optimize
 ```
 
 ## How it works
