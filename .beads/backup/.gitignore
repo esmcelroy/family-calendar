@@ -1,0 +1,9 @@
+# Dolt backup internals (managed by bd, not for git)
+*.darc
+manifest
+oldgen/
+LOCK
+backup_state.json
+
+# Allow the JSONL export (portably committed snapshot)
+!issues.jsonl

@@ -133,6 +133,12 @@ describe('formatRecurrencePattern', () => {
     const rule: RecurrenceRule = { frequency: 'daily', interval: 1, endType: 'count', endCount: 1 }
     expect(formatRecurrencePattern(rule)).toBe('Daily, 1 occurrence')
   })
+
+  it('appends end date when endType is date', () => {
+    const rule: RecurrenceRule = { frequency: 'weekly', interval: 1, endType: 'date', endDate: '2026-12-31' }
+    const result = formatRecurrencePattern(rule)
+    expect(result).toMatch(/^Weekly, until /)
+  })
 })
 
 describe('toRRule', () => {
@@ -180,7 +186,8 @@ describe('expandRecurringEvents', () => {
     const result = expandRecurringEvents([event], ref)
     expect(result.length).toBeGreaterThanOrEqual(3)
     expect(result.every((e) => e.title === 'Daily standup')).toBe(true)
-    expect(result.some((e) => e.id.includes(':'))).toBe(true)
+    const ids = result.map((e) => e.id)
+    expect(ids.some((id) => id.includes(':'))).toBe(true)
   })
 
   it('excludes deleted series exceptions', () => {
@@ -243,6 +250,7 @@ describe('expandRecurringEvents', () => {
     }
     const result = expandRecurringEvents([event], ref)
     expect(result.length).toBeGreaterThanOrEqual(3)
+    // All occurrences should fall in June (month may vary by ±1 day due to local timezone)
     result.forEach((e) => expect(e.date).toMatch(/^\d{4}-06-/))
   })
 })

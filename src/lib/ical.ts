@@ -76,7 +76,7 @@ function buildVEvent(lines: string[], event: CalendarEvent, memberMap: Map<strin
     lines.push(`DTSTART:${formatICalDateTime(startDateTime)}`)
 
     if (event.endTime) {
-      let endDateTime = combineDateTime(eventDate, event.endTime)
+      const endDateTime = combineDateTime(eventDate, event.endTime)
       if (endDateTime < startDateTime) {
         endDateTime.setDate(endDateTime.getDate() + 1)
       }
