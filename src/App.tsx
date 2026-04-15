@@ -14,6 +14,13 @@ import { Toaster, toast } from 'sonner'
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 function App() {
   const [events, setEvents] = useLocalStorage<CalendarEvent[]>(STORAGE_KEYS.events, [])
   const [members, setMembers] = useLocalStorage<FamilyMember[]>(STORAGE_KEYS.members, [])
@@ -100,7 +107,7 @@ function App() {
             seriesExceptions: (sourceEvent.seriesExceptions || []).filter((exception) => exception.date < occurrenceDate),
           }
 
-          const newSeriesId = Date.now().toString()
+          const newSeriesId = generateId()
           const newEvent: CalendarEvent = {
             ...eventData,
             id: newSeriesId,
@@ -134,7 +141,7 @@ function App() {
       )
       toast.success('Event updated')
     } else {
-      const newId = Date.now().toString()
+      const newId = generateId()
       const newEvent: CalendarEvent = {
         ...eventData,
         id: newId,
@@ -218,7 +225,7 @@ function App() {
   const handleAddMember = (memberData: Omit<FamilyMember, 'id'>) => {
     const newMember: FamilyMember = {
       ...memberData,
-      id: Date.now().toString(),
+      id: generateId(),
     }
     setMembers((currentMembers) => [...(currentMembers || []), newMember])
   }

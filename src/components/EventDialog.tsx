@@ -98,7 +98,7 @@ export function EventDialog({
       description: description.trim() || undefined,
       memberIds: selectedMembers,
       recurrence,
-      seriesId: recurrence ? (editEvent?.seriesId || editEvent?.id || Date.now().toString()) : undefined,
+      seriesId: recurrence ? (editEvent?.seriesId || editEvent?.id) : undefined,
       seriesExceptions: recurrence ? (editEvent?.seriesExceptions || []) : undefined,
     })
 

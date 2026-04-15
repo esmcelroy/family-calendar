@@ -68,9 +68,14 @@ export function expandRecurringEvents(events: CalendarEvent[], referenceDate: Da
   horizonEnd.setHours(23, 59, 59, 999)
 
   const expanded = events.flatMap((event) => expandEvent(event, horizonStart, horizonEnd))
-  return sortEventsByTime(expanded).sort((a, b) => {
-    if (a.date === b.date) return 0
-    return a.date.localeCompare(b.date)
+  return expanded.sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date)
+    if (dateCompare !== 0) return dateCompare
+
+    if (!a.startTime && !b.startTime) return 0
+    if (!a.startTime) return 1
+    if (!b.startTime) return -1
+    return a.startTime.localeCompare(b.startTime)
   })
 }
 
@@ -286,7 +291,7 @@ export function toRRule(recurrence: RecurrenceRule): string {
     parts.push(`COUNT=${recurrence.endCount}`)
   } else if (recurrence.endType === 'date' && recurrence.endDate) {
     const untilDate = new Date(recurrence.endDate)
-    untilDate.setUTCHours(23, 59, 59, 0)
+    untilDate.setUTCHours(23, 59, 59, 999)
     parts.push(`UNTIL=${untilDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')}`)
   }
 

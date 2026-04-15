@@ -81,7 +81,12 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
               <span className="inline-flex items-center gap-1">
                 {(event.recurrence || event.recurrenceMeta) && <Repeat size={10} aria-hidden="true" />}
                 {event.title}
-                {event.recurrenceMeta?.isModified && <span aria-label="Modified occurrence">*</span>}
+                {event.recurrenceMeta?.isModified && (
+                  <>
+                    <span aria-hidden="true">*</span>
+                    <span className="sr-only">Modified occurrence</span>
+                  </>
+                )}
               </span>
             </button>
           ))}
