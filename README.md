@@ -3,6 +3,13 @@ You've just launched your brand-new Spark Template Codespace — everything’s 
 
 This template is your blank canvas. It comes with a minimal setup to help you get started quickly with Spark development.
 
+## Node.js version
+
+This project requires **Node.js 22 LTS**.
+
+- Use the pinned version from `.nvmrc` (`nvm use`)
+- `package.json` enforces the same requirement via `engines.node`
+
 🚀 What's Inside?
 - A clean, minimal Spark environment
 - Pre-configured for local development
