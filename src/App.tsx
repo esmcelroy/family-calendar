@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useKV } from '@github/spark/hooks'
+import { useLocalStorage } from '@/hooks/use-local-storage'
+import { STORAGE_KEYS } from '@/lib/storage'
 import { CalendarEvent, FamilyMember } from '@/lib/types'
 import { CalendarGrid } from '@/components/CalendarGrid'
 import { EventDialog } from '@/components/EventDialog'
@@ -7,14 +8,15 @@ import { EventDetailsDialog } from '@/components/EventDetailsDialog'
 import { FamilyMembersSheet } from '@/components/FamilyMembersSheet'
 import { Button } from '@/components/ui/button'
 import { formatMonthYear } from '@/lib/calendar'
-import { Plus, CaretLeft, CaretRight, Users, CalendarBlank, Funnel } from '@phosphor-icons/react'
+import { generateICalendar, downloadICalendar } from '@/lib/ical'
+import { Plus, CaretLeft, CaretRight, Users, CalendarBlank, Funnel, Download } from '@phosphor-icons/react'
 import { Toaster, toast } from 'sonner'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 function App() {
-  const [events, setEvents] = useKV<CalendarEvent[]>('family-events', [])
-  const [members, setMembers] = useKV<FamilyMember[]>('family-members', [])
+  const [events, setEvents] = useLocalStorage<CalendarEvent[]>(STORAGE_KEYS.events, [])
+  const [members, setMembers] = useLocalStorage<FamilyMember[]>(STORAGE_KEYS.members, [])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showEventDialog, setShowEventDialog] = useState(false)
@@ -23,6 +25,7 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [activeFilters, setActiveFilters] = useState<string[]>([])
+  const shouldReduceMotion = useReducedMotion()
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))
@@ -104,6 +107,23 @@ function App() {
     )
   }
 
+  const handleExportICalendar = () => {
+    if (!events || events.length === 0) {
+      toast.error('No events to export')
+      return
+    }
+    
+    try {
+      const icalContent = generateICalendar(events, members || [])
+      downloadICalendar(icalContent)
+      toast.success('Calendar exported successfully')
+    } catch (error) {
+      console.error('Error exporting calendar:', error)
+      const message = error instanceof Error ? error.message : 'Failed to export calendar'
+      toast.error(`Export failed: ${message}`)
+    }
+  }
+
   const hasNoEvents = (events || []).length === 0
   const hasNoMembers = (members || []).length === 0
 
@@ -120,6 +140,15 @@ function App() {
               <Users size={20} />
               <span className="hidden sm:inline">Family</span>
             </Button>
+            <Button 
+              variant="outline" 
+              className="gap-2" 
+              onClick={handleExportICalendar}
+              disabled={hasNoEvents}
+            >
+              <Download size={20} />
+              <span className="hidden sm:inline">Export</span>
+            </Button>
             <Button className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => {
               setSelectedDate(new Date())
               setEditingEvent(null)
@@ -133,13 +162,13 @@ function App() {
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+            <Button variant="outline" size="icon" onClick={handlePrevMonth} aria-label="Previous month">
               <CaretLeft size={20} />
             </Button>
             <h2 className="text-2xl font-semibold min-w-[200px] text-center">
               {formatMonthYear(currentDate)}
             </h2>
-            <Button variant="outline" size="icon" onClick={handleNextMonth}>
+            <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="Next month">
               <CaretRight size={20} />
             </Button>
             <Button variant="outline" onClick={handleToday}>
@@ -148,28 +177,38 @@ function App() {
           </div>
 
           {(members || []).length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <Funnel size={18} className="text-muted-foreground" />
-              {(members || []).map((member) => (
-                <motion.button
-                  key={member.id}
-                  onClick={() => toggleFilter(member.id)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-full text-sm font-medium transition-all',
-                    activeFilters.includes(member.id) || activeFilters.length === 0
-                      ? 'text-white'
-                      : 'opacity-40'
-                  )}
-                  style={{
-                    backgroundColor: member.color,
-                    border: `2px solid ${member.color}`,
-                  }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+            <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by family member">
+              <Funnel size={18} className="text-muted-foreground" aria-hidden="true" />
+              {(members || []).map((member) => {
+                const isActive = activeFilters.includes(member.id) || activeFilters.length === 0
+                return (
+                  <motion.button
+                    key={member.id}
+                    onClick={() => toggleFilter(member.id)}
+                    aria-pressed={activeFilters.includes(member.id) || activeFilters.length === 0}
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-sm font-medium transition-all',
+                      isActive ? 'text-white' : 'opacity-40'
+                    )}
+                    style={{
+                      backgroundColor: member.color,
+                      border: `2px solid ${member.color}`,
+                    }}
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+                  >
+                    {member.name}
+                  </motion.button>
+                )
+              })}
+              {activeFilters.length > 0 && (
+                <button
+                  onClick={() => setActiveFilters([])}
+                  className="px-3 py-1.5 rounded-full text-sm font-medium border border-muted-foreground/40 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {member.name}
-                </motion.button>
-              ))}
+                  Show all
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -180,7 +219,7 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-col items-center justify-center py-20 px-4"
           >
-            <CalendarBlank size={80} className="text-muted-foreground mb-4" weight="duotone" />
+            <CalendarBlank size={80} className="text-muted-foreground mb-4" weight="duotone" aria-hidden="true" />
             <h3 className="text-2xl font-semibold mb-2">Welcome to Family Calendar!</h3>
             <p className="text-muted-foreground text-center max-w-md mb-6">
               Start by adding family members, then create events to keep everyone on the same page.

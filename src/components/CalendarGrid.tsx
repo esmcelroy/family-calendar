@@ -1,6 +1,6 @@
 import { CalendarEvent, FamilyMember } from '@/lib/types'
 import { getDaysInMonth, getFirstDayOfMonth, isToday, isPast, getEventsForDate, formatDate } from '@/lib/calendar'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 interface CalendarGridProps {
@@ -19,6 +19,7 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
   const month = currentDate.getMonth()
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
+  const shouldReduceMotion = useReducedMotion()
 
   const filteredEvents = activeFilters.length > 0
     ? events.filter((event) => event.memberIds.some((id) => activeFilters.includes(id)))
@@ -33,11 +34,15 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
     const dateEvents = getEventsForDate(filteredEvents, date)
     const isCurrentDay = isToday(date)
     const isPastDay = isPast(date)
+    const dateLabel = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    const eventCount = dateEvents.length
+    const cellLabel = `${dateLabel}${isCurrentDay ? ', today' : ''}${eventCount > 0 ? `, ${eventCount} event${eventCount !== 1 ? 's' : ''}` : ', no events'}`
 
     return (
       <motion.button
         key={day}
         onClick={() => onDateClick(date)}
+        aria-label={`Add event on ${cellLabel}`}
         className={cn(
           'min-h-24 p-2 rounded-lg border transition-all hover:shadow-md hover:scale-[1.02]',
           'flex flex-col items-start gap-1 bg-card',
@@ -45,7 +50,7 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
           isPastDay && 'opacity-60',
           !isCurrentDay && 'hover:border-primary/50'
         )}
-        whileHover={{ y: -2 }}
+        whileHover={shouldReduceMotion ? undefined : { y: -2 }}
         transition={{ duration: 0.2 }}
       >
         <span
@@ -64,6 +69,8 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
                 e.stopPropagation()
                 onEventClick(event)
               }}
+              title={event.title}
+              aria-label={`View event: ${event.title}`}
               className="w-full text-left text-xs px-2 py-1 rounded truncate transition-all hover:scale-105"
               style={{
                 backgroundColor: event.memberIds.length > 0 ? getMemberColor(event.memberIds[0]) : 'oklch(0.7 0.05 200)',
