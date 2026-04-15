@@ -127,7 +127,7 @@ The app needs a way to actually send email. For families with a home server or d
 
 - **DeliveryPreference** (extended onto FamilyMember): `email` (string, optional), `preferredPlatform` (enum: `google` | `apple` | `outlook` | `other` | `none`).
 - **Invitation**: A transient object representing one outbound iMIP message. Attributes: `recipientEmail`, `icsPayload` (string), `method` (`REQUEST` | `CANCEL`), `eventId`, `sequence` (integer).
-- **SmtpConfig** (app-level setting, stored in localStorage): `host`, `port`, `username`, `password` (encrypted at rest), `fromAddress`, `fromName`.
+- **SmtpConfig** (app-level setting, stored in localStorage): `host`, `port`, `username`, `password`, `fromAddress`, `fromName`.
 - **DeliveryResult**: `status` (`sent` | `failed` | `skipped`), `recipientEmail`, `error` (optional string).
 
 ## Success Criteria *(mandatory)*
