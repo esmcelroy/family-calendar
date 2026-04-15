@@ -7,6 +7,7 @@ import createIconImportProxy from "@github/spark/vitePhosphorIconProxyPlugin";
 import { resolve } from 'path'
 
 const projectRoot = process.env.PROJECT_ROOT || import.meta.dirname
+const isTest = Boolean(process.env.VITEST)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -14,12 +15,23 @@ export default defineConfig({
     react(),
     tailwindcss(),
     // DO NOT REMOVE
-    createIconImportProxy() as PluginOption,
-    sparkPlugin() as PluginOption,
+    ...(!isTest ? [createIconImportProxy() as PluginOption, sparkPlugin() as PluginOption] : []),
   ],
   resolve: {
     alias: {
       '@': resolve(projectRoot, 'src')
     }
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    coverage: {
+      provider: 'v8',
+      include: ['src/lib/calendar.ts', 'src/lib/utils.ts'],
+      thresholds: {
+        lines: 70,
+        branches: 60,
+      },
+    },
   },
 });
