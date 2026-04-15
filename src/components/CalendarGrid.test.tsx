@@ -1,10 +1,21 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { CalendarGrid } from './CalendarGrid'
 import { formatDate } from '@/lib/calendar'
 import type { CalendarEvent, FamilyMember } from '@/lib/types'
 
 describe('CalendarGrid', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    expect(consoleErrorSpy, 'console.error should not be called (check for invalid HTML or React warnings)').not.toHaveBeenCalled()
+    consoleErrorSpy.mockRestore()
+  })
+
   it('renders events for matching days', () => {
     const members: FamilyMember[] = [{ id: 'm1', name: 'Alex', color: 'oklch(0.55 0.20 220)' }]
     const eventDate = new Date(2026, 0, 15)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarEvent, RecurrenceRule } from './types'
 import {
+  expandRecurringEvents,
   formatDate,
   formatMonthYear,
   formatRecurrencePattern,
@@ -155,5 +156,93 @@ describe('toRRule', () => {
     const result = toRRule(rule)
     expect(result).toMatch(/^FREQ=YEARLY;INTERVAL=1;UNTIL=/)
     expect(result).toMatch(/Z$/)
+  })
+})
+
+describe('expandRecurringEvents', () => {
+  it('passes through non-recurring events unchanged', () => {
+    const event: CalendarEvent = { id: 'e1', title: 'One-off', date: '2026-03-01', memberIds: [] }
+    const result = expandRecurringEvents([event], new Date(2026, 2, 1))
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('e1')
+  })
+
+  it('expands a daily recurring event into multiple occurrences', () => {
+    const ref = new Date(2026, 2, 15)
+    const event: CalendarEvent = {
+      id: 'series-1',
+      seriesId: 'series-1',
+      title: 'Daily standup',
+      date: '2026-03-01',
+      memberIds: [],
+      recurrence: { frequency: 'daily', interval: 1, endType: 'count', endCount: 3 },
+    }
+    const result = expandRecurringEvents([event], ref)
+    expect(result.length).toBeGreaterThanOrEqual(3)
+    expect(result.every((e) => e.title === 'Daily standup')).toBe(true)
+    expect(result.some((e) => e.id.includes(':'))).toBe(true)
+  })
+
+  it('excludes deleted series exceptions', () => {
+    const ref = new Date(2026, 2, 15)
+    const event: CalendarEvent = {
+      id: 'series-2',
+      seriesId: 'series-2',
+      title: 'Weekly meeting',
+      date: '2026-03-02',
+      memberIds: [],
+      recurrence: { frequency: 'daily', interval: 1, endType: 'count', endCount: 4 },
+      seriesExceptions: [{ date: '2026-03-03', type: 'deleted' }],
+    }
+    const result = expandRecurringEvents([event], ref)
+    expect(result.every((e) => e.date !== '2026-03-03')).toBe(true)
+  })
+
+  it('expands a weekly recurring event on specific days', () => {
+    const ref = new Date(2026, 0, 15)
+    const event: CalendarEvent = {
+      id: 'series-3',
+      seriesId: 'series-3',
+      title: 'Weekly on Mon/Wed',
+      date: '2026-01-05',
+      memberIds: [],
+      recurrence: { frequency: 'weekly', interval: 1, selectedDays: [1, 3], endType: 'count', endCount: 4 },
+    }
+    const result = expandRecurringEvents([event], ref)
+    expect(result.length).toBeGreaterThanOrEqual(4)
+    result.forEach((e) => {
+      const dow = new Date(e.date + 'T00:00:00').getDay()
+      expect([1, 3]).toContain(dow)
+    })
+  })
+
+  it('expands a monthly recurring event', () => {
+    const ref = new Date(2026, 5, 1)
+    const event: CalendarEvent = {
+      id: 'series-4',
+      seriesId: 'series-4',
+      title: 'Monthly review',
+      date: '2026-01-15',
+      memberIds: [],
+      recurrence: { frequency: 'monthly', interval: 1, endType: 'count', endCount: 3 },
+    }
+    const result = expandRecurringEvents([event], ref)
+    expect(result.length).toBeGreaterThanOrEqual(3)
+    result.forEach((e) => expect(e.title).toBe('Monthly review'))
+  })
+
+  it('expands a yearly recurring event', () => {
+    const ref = new Date(2028, 0, 1)
+    const event: CalendarEvent = {
+      id: 'series-5',
+      seriesId: 'series-5',
+      title: 'Annual birthday',
+      date: '2026-06-20',
+      memberIds: [],
+      recurrence: { frequency: 'yearly', interval: 1, endType: 'count', endCount: 3 },
+    }
+    const result = expandRecurringEvents([event], ref)
+    expect(result.length).toBeGreaterThanOrEqual(3)
+    result.forEach((e) => expect(e.date).toMatch(/^\d{4}-06-/))
   })
 })
