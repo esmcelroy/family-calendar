@@ -2,6 +2,13 @@
 
 Family Calendar is a lightweight shared calendar for households. It focuses on quick event entry, simple month navigation, family-member color coding, and local-first persistence so a family can keep a single schedule visible without setting up a backend.
 
+## Node.js version
+
+This project requires **Node.js 22 LTS**.
+
+- Use the pinned version from `.nvmrc` (`nvm use`)
+- `package.json` enforces the same requirement via `engines.node`
+
 ## Current capabilities
 
 - Month-based calendar view with previous, next, and today navigation
