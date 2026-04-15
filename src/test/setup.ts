@@ -35,6 +35,7 @@ beforeEach(() => {
   vi.stubGlobal(
     'matchMedia',
     vi.fn().mockImplementation((query: string) => ({
+      // Default to no active media query; tests can override by stubbing `window.matchMedia`.
       matches: false,
       media: query,
       onchange: null,

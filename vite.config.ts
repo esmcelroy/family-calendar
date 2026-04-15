@@ -14,7 +14,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // DO NOT REMOVE
+    // DO NOT REMOVE (disabled under Vitest to avoid non-test plugin side effects in jsdom runs)
     ...(!isTest ? [createIconImportProxy() as PluginOption, sparkPlugin() as PluginOption] : []),
   ],
   resolve: {
