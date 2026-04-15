@@ -3,7 +3,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
 class LocalStorageMock implements Storage {
-  [key: string]: any
+  [key: string]: unknown
   private store: Record<string, string> = {}
 
   get length() {

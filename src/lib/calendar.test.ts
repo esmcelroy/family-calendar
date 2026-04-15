@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { CalendarEvent } from './types'
+import type { CalendarEvent, RecurrenceRule } from './types'
 import {
   formatDate,
   formatMonthYear,
+  formatRecurrencePattern,
   formatTime,
   getDaysInMonth,
   getEventsForDate,
@@ -10,6 +11,7 @@ import {
   isPast,
   isToday,
   sortEventsByTime,
+  toRRule,
 } from './calendar'
 
 describe('calendar utilities', () => {
@@ -87,5 +89,71 @@ describe('calendar utilities', () => {
 
     expect(sorted.map((event) => event.id)).toEqual(['2', '1', '3'])
     expect(events.map((event) => event.id)).toEqual(['3', '1', '2'])
+  })
+})
+
+describe('formatRecurrencePattern', () => {
+  it('returns "Daily" for a daily rule with no interval', () => {
+    const rule: RecurrenceRule = { frequency: 'daily', interval: 1, endType: 'none' }
+    expect(formatRecurrencePattern(rule)).toBe('Daily, no end')
+  })
+
+  it('returns interval phrasing for daily with interval > 1', () => {
+    const rule: RecurrenceRule = { frequency: 'daily', interval: 3, endType: 'none' }
+    expect(formatRecurrencePattern(rule)).toBe('Every 3 days, no end')
+  })
+
+  it('returns "Weekly" for weekly with no selected days', () => {
+    const rule: RecurrenceRule = { frequency: 'weekly', interval: 1, endType: 'none' }
+    expect(formatRecurrencePattern(rule)).toBe('Weekly, no end')
+  })
+
+  it('returns day names for weekly with selectedDays', () => {
+    const rule: RecurrenceRule = { frequency: 'weekly', interval: 1, selectedDays: [1, 3, 5], endType: 'none' }
+    expect(formatRecurrencePattern(rule)).toBe('Weekly on Mon, Wed, Fri, no end')
+  })
+
+  it('returns "Monthly" for monthly', () => {
+    const rule: RecurrenceRule = { frequency: 'monthly', interval: 1, endType: 'none' }
+    expect(formatRecurrencePattern(rule)).toBe('Monthly, no end')
+  })
+
+  it('returns "Yearly" for yearly', () => {
+    const rule: RecurrenceRule = { frequency: 'yearly', interval: 1, endType: 'none' }
+    expect(formatRecurrencePattern(rule)).toBe('Yearly, no end')
+  })
+
+  it('appends count when endType is count', () => {
+    const rule: RecurrenceRule = { frequency: 'daily', interval: 1, endType: 'count', endCount: 5 }
+    expect(formatRecurrencePattern(rule)).toBe('Daily, 5 occurrences')
+  })
+
+  it('uses singular "occurrence" for count of 1', () => {
+    const rule: RecurrenceRule = { frequency: 'daily', interval: 1, endType: 'count', endCount: 1 }
+    expect(formatRecurrencePattern(rule)).toBe('Daily, 1 occurrence')
+  })
+})
+
+describe('toRRule', () => {
+  it('produces a basic daily RRULE', () => {
+    const rule: RecurrenceRule = { frequency: 'daily', interval: 1, endType: 'none' }
+    expect(toRRule(rule)).toBe('FREQ=DAILY;INTERVAL=1')
+  })
+
+  it('produces a weekly RRULE with BYDAY', () => {
+    const rule: RecurrenceRule = { frequency: 'weekly', interval: 1, selectedDays: [1, 5], endType: 'none' }
+    expect(toRRule(rule)).toBe('FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,FR')
+  })
+
+  it('includes COUNT when endType is count', () => {
+    const rule: RecurrenceRule = { frequency: 'monthly', interval: 2, endType: 'count', endCount: 6 }
+    expect(toRRule(rule)).toBe('FREQ=MONTHLY;INTERVAL=2;COUNT=6')
+  })
+
+  it('includes UNTIL when endType is date', () => {
+    const rule: RecurrenceRule = { frequency: 'yearly', interval: 1, endType: 'date', endDate: '2026-12-31' }
+    const result = toRRule(rule)
+    expect(result).toMatch(/^FREQ=YEARLY;INTERVAL=1;UNTIL=/)
+    expect(result).toMatch(/Z$/)
   })
 })

@@ -1,5 +1,5 @@
 import { CalendarEvent, FamilyMember } from '@/lib/types'
-import { getDaysInMonth, getFirstDayOfMonth, isToday, isPast, getEventsForDate, formatDate } from '@/lib/calendar'
+import { getDaysInMonth, getFirstDayOfMonth, isToday, isPast, getEventsForDate } from '@/lib/calendar'
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Repeat } from '@phosphor-icons/react'
@@ -64,15 +64,24 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
         </span>
         <div className="w-full space-y-1">
           {dateEvents.slice(0, 2).map((event) => (
-            <button
+            // role="button" div avoids nesting <button> inside <button> (invalid HTML)
+            <div
               key={event.id}
+              role="button"
+              tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation()
                 onEventClick(event)
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation()
+                  onEventClick(event)
+                }
+              }}
               title={event.title}
               aria-label={`View event: ${event.title}`}
-              className="w-full text-left text-xs px-2 py-1 rounded truncate transition-all hover:scale-105"
+              className="w-full text-left text-xs px-2 py-1 rounded truncate transition-all hover:scale-105 cursor-pointer"
               style={{
                 backgroundColor: event.memberIds.length > 0 ? getMemberColor(event.memberIds[0]) : 'oklch(0.7 0.05 200)',
                 color: 'white',
@@ -88,7 +97,7 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
                   </>
                 )}
               </span>
-            </button>
+            </div>
           ))}
           {dateEvents.length > 2 && (
             <div className="text-xs text-muted-foreground px-2 font-medium">
