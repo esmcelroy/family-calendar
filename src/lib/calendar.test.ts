@@ -29,6 +29,16 @@ describe('calendar utilities', () => {
     expect(formatDate(new Date('2026-01-10T12:00:00.000Z'))).toBe('2026-01-10')
   })
 
+  it('formats a local-midnight date without shifting the day', () => {
+    const date = new Date(2026, 0, 10)
+    const expected = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-')
+
+    expect(formatDate(date)).toBe(expected)
+  })
   it('formats time from 24-hour to 12-hour display', () => {
     expect(formatTime('00:30')).toBe('12:30 AM')
     expect(formatTime('13:15')).toBe('1:15 PM')
