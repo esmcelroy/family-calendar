@@ -1,8 +1,8 @@
 # Feature Specification: Kiosk / Family Display Mode
 
-**Feature Branch**: `012-kiosk-display-mode`
-**Created**: 2026-04-15
-**Status**: Draft
+**Feature Branch**: `012-kiosk-display-mode`  
+**Created**: 2026-04-15  
+**Status**: Draft  
 **Input**: The app should work as a wall-mounted display (TV, tablet, or monitor in a common area of the home) showing a glanceable, always-on view of the family schedule — no interaction required.
 
 ## User Scenarios & Testing *(mandatory)*
