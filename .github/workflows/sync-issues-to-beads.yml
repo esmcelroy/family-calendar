@@ -1,0 +1,109 @@
+name: Sync GitHub Issues to Beads
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened]
+
+permissions:
+  contents: write
+
+# Serialize runs so concurrent issue events don't produce JSONL conflicts
+concurrency:
+  group: beads-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-to-beads:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install bd (beads CLI)
+        run: npm install -g @beads/bd
+
+      # bd init --from-jsonl reads .beads/issues.jsonl; copy the git-tracked
+      # backup there so the embedded database can be bootstrapped from it.
+      - name: Bootstrap beads database from backup JSONL
+        run: |
+          cp -f .beads/backup/issues.jsonl .beads/issues.jsonl
+          bd --sandbox init --from-jsonl --quiet 2>/dev/null || true
+
+      - name: Sync GitHub issue to beads
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_ACTION: ${{ github.event.action }}
+        run: |
+          EXTERNAL_REF="gh-${ISSUE_NUMBER}"
+
+          # Look up whether a beads issue already references this GitHub issue
+          EXISTING_ID=$(bd --sandbox list --json 2>/dev/null \
+            | jq -r ".[] | select(.external_ref == \"${EXTERNAL_REF}\") | .id" 2>/dev/null \
+            | head -1)
+
+          echo "action=${ISSUE_ACTION}  gh_issue=#${ISSUE_NUMBER}  beads_id=${EXISTING_ID:-none}"
+
+          case "${ISSUE_ACTION}" in
+            opened)
+              if [ -z "${EXISTING_ID}" ]; then
+                printf '%s' "${ISSUE_BODY}" \
+                  | bd --sandbox create "${ISSUE_TITLE}" \
+                      --external-ref "${EXTERNAL_REF}" \
+                      -t task -p 2 \
+                      --body-file=- \
+                      --json
+              fi
+              ;;
+            closed)
+              if [ -n "${EXISTING_ID}" ]; then
+                bd --sandbox close "${EXISTING_ID}" \
+                  --reason "Closed on GitHub" \
+                  --json
+              fi
+              ;;
+            reopened)
+              if [ -n "${EXISTING_ID}" ]; then
+                bd --sandbox reopen "${EXISTING_ID}" \
+                  --reason "Reopened on GitHub" \
+                  --json
+              fi
+              ;;
+            edited)
+              # Create a beads issue if one does not yet exist for this issue
+              if [ -z "${EXISTING_ID}" ]; then
+                printf '%s' "${ISSUE_BODY}" \
+                  | bd --sandbox create "${ISSUE_TITLE}" \
+                      --external-ref "${EXTERNAL_REF}" \
+                      -t task -p 2 \
+                      --body-file=- \
+                      --json
+              fi
+              ;;
+          esac
+
+      # Write the updated database state back to the git-tracked backup file
+      - name: Export updated beads database to backup JSONL
+        run: bd --sandbox export -o .beads/backup/issues.jsonl
+
+      - name: Commit and push beads changes
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # Clean up the temporary bootstrap file
+          rm -f .beads/issues.jsonl
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .beads/backup/issues.jsonl
+          if git diff --staged --quiet; then
+            echo "No beads changes to commit"
+          else
+            git commit -m "sync: GitHub issue #${ISSUE_NUMBER} → beads [skip ci]"
+            git push
+          fi
