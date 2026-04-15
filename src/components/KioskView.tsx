@@ -184,10 +184,10 @@ export function KioskView() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [refresh])
 
-  const allMembers = members ?? []
-  const memberFilter = kioskConfig?.memberFilter ?? []
+  const allMembers = members
+  const memberFilter = kioskConfig.memberFilter
 
-  const expandedEvents = expandRecurringEvents(events ?? [], now)
+  const expandedEvents = expandRecurringEvents(events, now)
 
   // Apply member filter if configured
   const filteredEvents =
@@ -211,7 +211,7 @@ export function KioskView() {
       upcomingDays.push({ date: d, events: dayEvents })
     }
   }
-  const upcomingSliced = upcomingDays.slice(0, MAX_UPCOMING_EVENTS)
+  const visibleUpcomingDays = upcomingDays.slice(0, MAX_UPCOMING_EVENTS)
 
   return (
     <div
@@ -279,14 +279,14 @@ export function KioskView() {
         >
           <h2 className="text-2xl font-bold mb-5 shrink-0">Next 7 Days</h2>
 
-          {upcomingSliced.length === 0 ? (
+          {visibleUpcomingDays.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground gap-3">
               <CalendarBlank size={48} weight="duotone" aria-hidden="true" />
               <p className="text-xl font-medium">Nothing coming up</p>
             </div>
           ) : (
             <div className="flex flex-col gap-5 overflow-y-auto flex-1 pr-1">
-              {upcomingSliced.map(({ date, events: dayEvents }) => (
+              {visibleUpcomingDays.map(({ date, events: dayEvents }) => (
                 <UpcomingDay
                   key={formatDate(date)}
                   date={date}

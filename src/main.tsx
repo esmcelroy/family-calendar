@@ -10,6 +10,10 @@ import "./main.css"
 import "./styles/theme.css"
 import "./index.css"
 
+// Route to KioskView when the URL path is /kiosk (or starts with /kiosk/).
+// This app has no client-side router; users navigate directly to /kiosk via the
+// browser address bar or a bookmark. A page load or reload at /kiosk is required
+// to switch between the main app and kiosk mode.
 const pathname = window.location.pathname
 const isKiosk = pathname === '/kiosk' || pathname.startsWith('/kiosk/')
 
