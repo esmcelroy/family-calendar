@@ -12,7 +12,39 @@ export interface CalendarEvent {
   endTime?: string
   description?: string
   memberIds: string[]
+  seriesId?: string
+  recurrence?: RecurrenceRule
+  seriesExceptions?: SeriesException[]
+  recurrenceMeta?: RecurrenceMeta
 }
+
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+export type RecurrenceEndType = 'none' | 'date' | 'count'
+
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency
+  interval: number
+  selectedDays?: number[]
+  endType: RecurrenceEndType
+  endDate?: string
+  endCount?: number
+}
+
+export interface SeriesException {
+  date: string
+  type: 'modified' | 'deleted'
+  overrides?: Partial<Omit<CalendarEvent, 'id' | 'memberIds' | 'recurrence' | 'seriesExceptions' | 'recurrenceMeta'>> & {
+    memberIds?: string[]
+  }
+}
+
+export interface RecurrenceMeta {
+  sourceEventId: string
+  occurrenceDate: string
+  isModified: boolean
+}
+
+export type RecurringEditScope = 'this' | 'following' | 'all'
 
 export const MEMBER_COLORS = [
   { name: 'Sky', value: 'oklch(0.65 0.18 240)' },

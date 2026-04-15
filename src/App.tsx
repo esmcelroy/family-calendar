@@ -1,18 +1,25 @@
 import { useState } from 'react'
 import { useLocalStorage } from '@/hooks/use-local-storage'
 import { STORAGE_KEYS } from '@/lib/storage'
-import { CalendarEvent, FamilyMember } from '@/lib/types'
+import { CalendarEvent, FamilyMember, RecurringEditScope, SeriesException } from '@/lib/types'
 import { CalendarGrid } from '@/components/CalendarGrid'
 import { EventDialog } from '@/components/EventDialog'
 import { EventDetailsDialog } from '@/components/EventDetailsDialog'
 import { FamilyMembersSheet } from '@/components/FamilyMembersSheet'
 import { Button } from '@/components/ui/button'
-import { formatMonthYear } from '@/lib/calendar'
+import { expandRecurringEvents, formatDate, formatMonthYear } from '@/lib/calendar'
 import { generateICalendar, downloadICalendar } from '@/lib/ical'
 import { Plus, CaretLeft, CaretRight, Users, CalendarBlank, Funnel, Download } from '@phosphor-icons/react'
 import { Toaster, toast } from 'sonner'
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
 
 function App() {
   const [events, setEvents] = useLocalStorage<CalendarEvent[]>(STORAGE_KEYS.events, [])
@@ -24,8 +31,10 @@ function App() {
   const [showMembersSheet, setShowMembersSheet] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  const [editingScope, setEditingScope] = useState<RecurringEditScope>('all')
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const shouldReduceMotion = useReducedMotion()
+  const expandedEvents = expandRecurringEvents(events || [], currentDate)
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))
@@ -51,34 +60,164 @@ function App() {
   }
 
   const handleSaveEvent = (eventData: Omit<CalendarEvent, 'id'>) => {
-    if (editingEvent) {
+    if (editingEvent && editingEvent.recurrenceMeta) {
+      const sourceId = editingEvent.recurrenceMeta.sourceEventId
+      const occurrenceDate = editingEvent.recurrenceMeta.occurrenceDate
+      if (editingScope === 'this') {
+        setEvents((currentEvents) =>
+          (currentEvents || []).map((event) => {
+            if (event.id !== sourceId) return event
+
+            const exceptions = [...(event.seriesExceptions || [])].filter((exception) => exception.date !== occurrenceDate)
+            const overrides: SeriesException['overrides'] = {
+              title: eventData.title,
+              startTime: eventData.startTime,
+              endTime: eventData.endTime,
+              description: eventData.description,
+              memberIds: eventData.memberIds,
+            }
+
+            exceptions.push({
+              date: occurrenceDate,
+              type: 'modified',
+              overrides,
+            })
+
+            return {
+              ...event,
+              seriesExceptions: exceptions,
+            }
+          })
+        )
+        toast.success('Occurrence updated')
+      } else if (editingScope === 'following') {
+        setEvents((currentEvents) => {
+          const sourceEvent = (currentEvents || []).find((event) => event.id === sourceId)
+          if (!sourceEvent?.recurrence) return currentEvents || []
+
+          const previousDay = new Date(occurrenceDate)
+          previousDay.setDate(previousDay.getDate() - 1)
+          const updatedSource: CalendarEvent = {
+            ...sourceEvent,
+            recurrence: {
+              ...sourceEvent.recurrence,
+              endType: 'date',
+              endDate: formatDate(previousDay),
+            },
+            seriesExceptions: (sourceEvent.seriesExceptions || []).filter((exception) => exception.date < occurrenceDate),
+          }
+
+          const newSeriesId = generateId()
+          const newEvent: CalendarEvent = {
+            ...eventData,
+            id: newSeriesId,
+            date: occurrenceDate,
+            recurrence: eventData.recurrence || sourceEvent.recurrence,
+            seriesId: newSeriesId,
+            seriesExceptions: [],
+          }
+
+          return (currentEvents || []).map((event) => (event.id === sourceId ? updatedSource : event)).concat(newEvent)
+        })
+        toast.success('Updated this and following occurrences')
+      } else {
+        setEvents((currentEvents) =>
+          (currentEvents || []).map((event) =>
+            event.id === sourceId
+              ? {
+                  ...eventData,
+                  id: sourceId,
+                  seriesId: event.seriesId || sourceId,
+                  seriesExceptions: event.seriesExceptions || [],
+                }
+              : event
+          )
+        )
+        toast.success('Series updated')
+      }
+    } else if (editingEvent) {
       setEvents((currentEvents) =>
         (currentEvents || []).map((e) => (e.id === editingEvent.id ? { ...eventData, id: editingEvent.id } : e))
       )
       toast.success('Event updated')
     } else {
+      const newId = generateId()
       const newEvent: CalendarEvent = {
         ...eventData,
-        id: Date.now().toString(),
+        id: newId,
+        seriesId: eventData.recurrence ? (eventData.seriesId || newId) : undefined,
       }
       setEvents((currentEvents) => [...(currentEvents || []), newEvent])
       toast.success('Event added')
     }
     setEditingEvent(null)
+    setEditingScope('all')
   }
 
-  const handleEditEvent = () => {
+  const handleEditEvent = (scope: RecurringEditScope) => {
     if (selectedEvent) {
-      setEditingEvent(selectedEvent)
+      setEditingScope(scope)
+      if (selectedEvent.recurrenceMeta) {
+        const sourceEvent = (events || []).find((event) => event.id === selectedEvent.recurrenceMeta?.sourceEventId)
+        if (scope === 'all' && sourceEvent) {
+          setEditingEvent(sourceEvent)
+        } else {
+          setEditingEvent({
+            ...selectedEvent,
+            id: selectedEvent.recurrenceMeta.sourceEventId,
+            date: selectedEvent.recurrenceMeta.occurrenceDate,
+          })
+        }
+      } else {
+        setEditingEvent(selectedEvent)
+      }
       setShowDetailsDialog(false)
       setShowEventDialog(true)
     }
   }
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = (scope: RecurringEditScope) => {
     if (selectedEvent) {
-      setEvents((currentEvents) => (currentEvents || []).filter((e) => e.id !== selectedEvent.id))
-      toast.success('Event deleted')
+      if (selectedEvent.recurrenceMeta) {
+        const sourceId = selectedEvent.recurrenceMeta.sourceEventId
+        const occurrenceDate = selectedEvent.recurrenceMeta.occurrenceDate
+        if (scope === 'this') {
+          setEvents((currentEvents) =>
+            (currentEvents || []).map((event) => {
+              if (event.id !== sourceId) return event
+              const exceptions = [...(event.seriesExceptions || [])].filter((exception) => exception.date !== occurrenceDate)
+              exceptions.push({ date: occurrenceDate, type: 'deleted' })
+              return { ...event, seriesExceptions: exceptions }
+            })
+          )
+          toast.success('Occurrence deleted')
+        } else if (scope === 'following') {
+          const previousDay = new Date(occurrenceDate)
+          previousDay.setDate(previousDay.getDate() - 1)
+          setEvents((currentEvents) =>
+            (currentEvents || []).map((event) =>
+              event.id === sourceId && event.recurrence
+                ? {
+                    ...event,
+                    recurrence: {
+                      ...event.recurrence,
+                      endType: 'date',
+                      endDate: formatDate(previousDay),
+                    },
+                    seriesExceptions: (event.seriesExceptions || []).filter((exception) => exception.date < occurrenceDate),
+                  }
+                : event
+            )
+          )
+          toast.success('Deleted this and following occurrences')
+        } else {
+          setEvents((currentEvents) => (currentEvents || []).filter((event) => event.id !== sourceId))
+          toast.success('Series deleted')
+        }
+      } else {
+        setEvents((currentEvents) => (currentEvents || []).filter((e) => e.id !== selectedEvent.id))
+        toast.success('Event deleted')
+      }
       setSelectedEvent(null)
     }
   }
@@ -86,7 +225,7 @@ function App() {
   const handleAddMember = (memberData: Omit<FamilyMember, 'id'>) => {
     const newMember: FamilyMember = {
       ...memberData,
-      id: Date.now().toString(),
+      id: generateId(),
     }
     setMembers((currentMembers) => [...(currentMembers || []), newMember])
   }
@@ -242,7 +381,7 @@ function App() {
         ) : (
           <CalendarGrid
             currentDate={currentDate}
-            events={events || []}
+            events={expandedEvents}
             members={members || []}
             onDateClick={handleDateClick}
             onEventClick={handleEventClick}
@@ -258,6 +397,7 @@ function App() {
         selectedDate={selectedDate}
         members={members || []}
         editEvent={editingEvent}
+        disableRecurrenceEditing={Boolean(editingEvent?.recurrenceMeta) && editingScope === 'this'}
       />
 
       <EventDetailsDialog

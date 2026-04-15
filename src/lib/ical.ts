@@ -1,4 +1,5 @@
 import { CalendarEvent, FamilyMember } from './types'
+import { toRRule } from './calendar'
 
 /**
  * Converts events to iCalendar (RFC 5545) format
@@ -23,86 +24,105 @@ export function generateICalendar(events: CalendarEvent[], members: FamilyMember
   
   // Add each event
   events.forEach(event => {
-    lines.push('BEGIN:VEVENT')
-    
-    // Generate UID (unique identifier)
-    lines.push(`UID:${event.id}@family-calendar`)
-    
-    // Created and last modified timestamps (use current time as proxy)
-    const now = formatICalDateTime(new Date())
-    lines.push(`DTSTAMP:${now}`)
-    
-    // Event date and time
-    const eventDate = new Date(event.date)
-    
-    if (event.startTime) {
-      // Event has specific time - use DTSTART and DTEND
-      const startDateTime = combineDateTime(eventDate, event.startTime)
-      lines.push(`DTSTART:${formatICalDateTime(startDateTime)}`)
-      
-      if (event.endTime) {
-        let endDateTime = combineDateTime(eventDate, event.endTime)
-        // If end time is before start time, assume it's the next day
-        if (endDateTime < startDateTime) {
-          endDateTime.setDate(endDateTime.getDate() + 1)
-        }
-        lines.push(`DTEND:${formatICalDateTime(endDateTime)}`)
-      } else {
-        // Default to 1 hour duration if no end time
-        const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
-        lines.push(`DTEND:${formatICalDateTime(endDateTime)}`)
+    buildVEvent(lines, event, memberMap)
+
+    if (event.recurrence) {
+      lines.push(`RRULE:${toRRule(event.recurrence)}`)
+      const deletedDates = (event.seriesExceptions || [])
+        .filter((exception) => exception.type === 'deleted')
+        .map((exception) => formatICalDate(new Date(exception.date)))
+      if (deletedDates.length > 0) {
+        lines.push(`EXDATE;VALUE=DATE:${deletedDates.join(',')}`)
       }
+      lines.push('END:VEVENT')
+
+      ;(event.seriesExceptions || [])
+        .filter((exception) => exception.type === 'modified')
+        .forEach((exception) => {
+          const overriddenEvent: CalendarEvent = {
+            ...event,
+            ...exception.overrides,
+            id: `${event.id}:${exception.date}`,
+            date: exception.date,
+            recurrence: undefined,
+            seriesExceptions: undefined,
+          }
+          buildVEvent(lines, overriddenEvent, memberMap)
+          lines.push(`RECURRENCE-ID;VALUE=DATE:${formatICalDate(new Date(exception.date))}`)
+          lines.push('END:VEVENT')
+        })
     } else {
-      // All-day event - use DATE format
-      lines.push(`DTSTART;VALUE=DATE:${formatICalDate(eventDate)}`)
-      // All-day events have no end time, but we can set next day
-      const nextDay = new Date(eventDate)
-      nextDay.setDate(nextDay.getDate() + 1)
-      lines.push(`DTEND;VALUE=DATE:${formatICalDate(nextDay)}`)
+      lines.push('END:VEVENT')
     }
-    
-    // Event title (escape special characters)
-    lines.push(`SUMMARY:${escapeICalText(event.title)}`)
-    
-    // Event description with member names
-    let description = ''
-    if (event.memberIds && event.memberIds.length > 0) {
-      const memberNames = event.memberIds
-        .map(id => memberMap.get(id))
-        .filter((name): name is string => name !== undefined)
-        .join(', ')
-      description = `Family Members: ${memberNames}`
-      
-      if (event.description) {
-        description += `\n\n${event.description}`
-      }
-    } else if (event.description) {
-      description = event.description
-    }
-    
-    if (description) {
-      lines.push(`DESCRIPTION:${escapeICalText(description)}`)
-    }
-    
-    // Categories (use member names as categories)
-    if (event.memberIds && event.memberIds.length > 0) {
-      const categories = event.memberIds
-        .map(id => memberMap.get(id))
-        .filter((name): name is string => name !== undefined)
-        .map(name => name.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/\n/g, '\\n'))
-        .join(',')
-      if (categories) {
-        lines.push(`CATEGORIES:${categories}`)
-      }
-    }
-    
-    lines.push('END:VEVENT')
   })
   
   lines.push('END:VCALENDAR')
   
   // Join with CRLF as per RFC 5545
   return lines.join('\r\n')
+}
+
+function buildVEvent(lines: string[], event: CalendarEvent, memberMap: Map<string, string>): void {
+  lines.push('BEGIN:VEVENT')
+  lines.push(`UID:${(event.seriesId || event.id)}@family-calendar`)
+
+  const now = formatICalDateTime(new Date())
+  lines.push(`DTSTAMP:${now}`)
+
+  const eventDate = new Date(event.date)
+
+  if (event.startTime) {
+    const startDateTime = combineDateTime(eventDate, event.startTime)
+    lines.push(`DTSTART:${formatICalDateTime(startDateTime)}`)
+
+    if (event.endTime) {
+      let endDateTime = combineDateTime(eventDate, event.endTime)
+      if (endDateTime < startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1)
+      }
+      lines.push(`DTEND:${formatICalDateTime(endDateTime)}`)
+    } else {
+      const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
+      lines.push(`DTEND:${formatICalDateTime(endDateTime)}`)
+    }
+  } else {
+    lines.push(`DTSTART;VALUE=DATE:${formatICalDate(eventDate)}`)
+    const nextDay = new Date(eventDate)
+    nextDay.setDate(nextDay.getDate() + 1)
+    lines.push(`DTEND;VALUE=DATE:${formatICalDate(nextDay)}`)
+  }
+
+  lines.push(`SUMMARY:${escapeICalText(event.title)}`)
+
+  let description = ''
+  if (event.memberIds && event.memberIds.length > 0) {
+    const memberNames = event.memberIds
+      .map(id => memberMap.get(id))
+      .filter((name): name is string => name !== undefined)
+      .join(', ')
+    description = `Family Members: ${memberNames}`
+
+    if (event.description) {
+      description += `\n\n${event.description}`
+    }
+  } else if (event.description) {
+    description = event.description
+  }
+
+  if (description) {
+    lines.push(`DESCRIPTION:${escapeICalText(description)}`)
+  }
+
+  if (event.memberIds && event.memberIds.length > 0) {
+    const categories = event.memberIds
+      .map(id => memberMap.get(id))
+      .filter((name): name is string => name !== undefined)
+      .map(name => name.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/\n/g, '\\n'))
+      .join(',')
+    if (categories) {
+      lines.push(`CATEGORIES:${categories}`)
+    }
+  }
 }
 
 /**
