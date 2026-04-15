@@ -119,14 +119,14 @@ export function EventDialog({ open, onOpenChange, onSave, selectedDate, members,
                     key={member.id}
                     type="button"
                     onClick={() => toggleMember(member.id)}
+                    aria-pressed={selectedMembers.includes(member.id)}
                     className="px-3 py-1.5 rounded-full text-sm font-medium transition-all"
                     style={{
                       backgroundColor: selectedMembers.includes(member.id)
                         ? member.color
                         : 'transparent',
                       color: selectedMembers.includes(member.id) ? 'white' : member.color,
-                      border: `2px solid ${member.id}`,
-                      borderColor: member.color,
+                      border: `2px solid ${member.color}`,
                     }}
                   >
                     {member.name}
