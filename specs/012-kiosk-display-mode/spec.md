@@ -107,7 +107,7 @@ A family has configured kiosk mode to show only certain family members (e.g., th
 
 - **SC-001**: The kiosk route loads and renders a complete display within 2 seconds on a standard home network connection.
 - **SC-002**: Event titles and dates are legible (≥ 18px rendered font size) from a simulated 2-meter viewing distance (CSS zoom test).
-- **SC-003**: A new event added via the main app (same or different device, same localStorage) appears on the kiosk display within one refresh cycle (default ≤ 5 minutes).
+- **SC-003**: A new event added via the main app on the same device/browser profile appears on the kiosk display within one refresh cycle (default ≤ 5 minutes).
 - **SC-004**: The kiosk display renders correctly on 1920×1080, 1280×800, and 1024×768 viewports without horizontal scroll.
 - **SC-005**: The live clock updates at least once per minute without requiring a page reload.
 
