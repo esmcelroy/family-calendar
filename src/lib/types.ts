@@ -91,6 +91,15 @@ export interface DeliveryResult {
   error?: string
 }
 
+// ---------------------------------------------------------------------------
+// Spec 012 — Kiosk / Family Display Mode
+// ---------------------------------------------------------------------------
+
+export interface KioskConfig {
+  memberFilter: string[]
+  refreshIntervalMs: number
+}
+
 export const MEMBER_COLORS = [
   { name: 'Sky', value: 'oklch(0.65 0.18 240)' },
   { name: 'Ocean', value: 'oklch(0.55 0.20 220)' },

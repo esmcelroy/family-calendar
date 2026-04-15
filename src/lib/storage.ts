@@ -42,6 +42,7 @@ export const STORAGE_KEYS = {
   members: 'family-calendar:members',
   smtpConfig: 'family-calendar:smtp-config',
   organizerConfig: 'family-calendar:organizer-config',
+  kioskConfig: 'family-calendar:kiosk-config',
 } as const
 
 /** Union of all known storage key strings. */
