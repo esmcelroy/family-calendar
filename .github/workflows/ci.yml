@@ -8,6 +8,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   quality-gate:
     runs-on: ubuntu-latest
@@ -34,10 +37,10 @@ jobs:
       - name: Check for test script
         id: has_test
         run: |
-          if [ "$(npm pkg get scripts.test)" = "{}" ]; then
-            echo "has_test=false" >> "$GITHUB_OUTPUT"
-          else
+          if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test ? 0 : 1)"; then
             echo "has_test=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_test=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Test
