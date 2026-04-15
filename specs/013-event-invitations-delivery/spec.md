@@ -1,8 +1,8 @@
 # Feature Specification: Event Invitations & Multi-Platform Calendar Delivery
 
-**Feature Branch**: `013-event-invitations-delivery`
-**Created**: 2026-04-15
-**Status**: Draft
+**Feature Branch**: `013-event-invitations-delivery`  
+**Created**: 2026-04-15  
+**Status**: Draft  
 **Input**: When a family event is created or changed, family members should receive it in their own personal calendar app — regardless of whether they use Google Calendar, Apple Calendar, Outlook, or any other iCalendar-compatible client. Subscribing to an ICS feed is passive (pull); this feature is active (push).
 
 ## Background & Problem Statement
