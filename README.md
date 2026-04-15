@@ -78,6 +78,18 @@ src/
 specs/             Feature specifications and implementation planning
 ```
 
+## Testing
+
+This project uses **Vitest** and **React Testing Library**.
+
+- `npm test` — run the full test suite
+- `npm run test:coverage` — run tests with coverage report (enforces thresholds)
+- Coverage gates for `src/lib/` utilities: **70% line / 60% branch** minimum
+
+### TDD workflow
+
+Write tests first (red), implement the minimum to pass (green), then refactor while keeping tests green. New utility functions and components require tests written before the implementation. Trivial documentation-only changes are exempt.
+
 ## Roadmap
 
 The repository already includes specs for planned work such as:
