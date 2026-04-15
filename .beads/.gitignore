@@ -52,8 +52,8 @@ dolt-server.activity
 # Corrupt backup directories (created by bd doctor --fix recovery)
 *.corrupt.backup/
 
-# Backup data (auto-exported JSONL, local-only)
-backup/
+# Backup data is tracked by git for portability (backup.git-push: true in config.yaml)
+# backup/
 
 # Per-project environment file (Dolt connection config, GH#2520)
 .env
