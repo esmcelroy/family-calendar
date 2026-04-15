@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { CalendarEvent, FamilyMember } from '@/lib/types'
-import { formatTime } from '@/lib/calendar'
+import { CalendarEvent, FamilyMember, RecurringEditScope } from '@/lib/types'
+import { formatRecurrencePattern, formatTime } from '@/lib/calendar'
 import { Pencil, Trash, Clock, Users } from '@phosphor-icons/react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useState } from 'react'
@@ -10,18 +10,21 @@ interface EventDetailsDialogProps {
   event: CalendarEvent | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onEdit: () => void
-  onDelete: () => void
+  onEdit: (scope: RecurringEditScope) => void
+  onDelete: (scope: RecurringEditScope) => void
   members: FamilyMember[]
 }
 
 export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete, members }: EventDetailsDialogProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showEditScope, setShowEditScope] = useState(false)
+  const [showDeleteScope, setShowDeleteScope] = useState(false)
 
   if (!event) return null
 
   const eventMembers = members.filter((m) => event.memberIds.includes(m.id))
   const eventDate = new Date(event.date)
+  const isRecurringInstance = Boolean(event.recurrenceMeta)
   const formattedDate = eventDate.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -29,9 +32,10 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
     day: 'numeric',
   })
 
-  const handleDelete = () => {
-    onDelete()
+  const handleDelete = (scope: RecurringEditScope) => {
+    onDelete(scope)
     setShowDeleteConfirm(false)
+    setShowDeleteScope(false)
     onOpenChange(false)
   }
 
@@ -59,6 +63,18 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
                   {event.startTime && event.endTime && ' - '}
                   {event.endTime && formatTime(event.endTime)}
                 </p>
+              </div>
+            )}
+
+            {(event.recurrence || event.recurrenceMeta) && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-1">Recurrence</p>
+                <p className="text-base">
+                  {event.recurrence ? formatRecurrencePattern(event.recurrence) : 'Recurring series instance'}
+                </p>
+                {event.recurrenceMeta?.isModified && (
+                  <p className="text-sm text-muted-foreground mt-1">This occurrence was modified from the series.</p>
+                )}
               </div>
             )}
 
@@ -92,11 +108,15 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
             )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => setShowDeleteConfirm(true)}>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => (isRecurringInstance ? setShowDeleteScope(true) : setShowDeleteConfirm(true))}
+            >
               <Trash size={18} />
               Delete
             </Button>
-            <Button className="gap-2" onClick={onEdit}>
+            <Button className="gap-2" onClick={() => (isRecurringInstance ? setShowEditScope(true) : onEdit('all'))}>
               <Pencil size={18} />
               Edit
             </Button>
@@ -112,11 +132,45 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
               Are you sure you want to delete "{event.title}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => handleDelete('all')}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showEditScope} onOpenChange={setShowEditScope}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit recurring event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose how broadly to apply your changes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+            <AlertDialogAction onClick={() => { setShowEditScope(false); onEdit('this') }}>This event</AlertDialogAction>
+            <AlertDialogAction onClick={() => { setShowEditScope(false); onEdit('following') }}>This and following</AlertDialogAction>
+            <AlertDialogAction onClick={() => { setShowEditScope(false); onEdit('all') }}>All events</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteScope} onOpenChange={setShowDeleteScope}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete recurring event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose how broadly to apply this deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleDelete('this')}>This event</AlertDialogAction>
+            <AlertDialogAction onClick={() => handleDelete('following')}>This and following</AlertDialogAction>
+            <AlertDialogAction onClick={() => handleDelete('all')}>All events</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
       </AlertDialog>
     </>
   )

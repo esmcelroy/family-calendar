@@ -2,6 +2,7 @@ import { CalendarEvent, FamilyMember } from '@/lib/types'
 import { getDaysInMonth, getFirstDayOfMonth, isToday, isPast, getEventsForDate, formatDate } from '@/lib/calendar'
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { Repeat } from '@phosphor-icons/react'
 
 interface CalendarGridProps {
   currentDate: Date
@@ -77,7 +78,11 @@ export function CalendarGrid({ currentDate, events, members, onDateClick, onEven
                 color: 'white',
               }}
             >
-              {event.title}
+              <span className="inline-flex items-center gap-1">
+                {(event.recurrence || event.recurrenceMeta) && <Repeat size={10} aria-hidden="true" />}
+                {event.title}
+                {event.recurrenceMeta?.isModified && <span aria-label="Modified occurrence">*</span>}
+              </span>
             </button>
           ))}
           {dateEvents.length > 2 && (

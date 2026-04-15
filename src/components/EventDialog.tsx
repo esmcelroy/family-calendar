@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarEvent, FamilyMember } from '@/lib/types'
+import { CalendarEvent, FamilyMember, RecurrenceEndType, RecurrenceFrequency } from '@/lib/types'
 import { formatDate } from '@/lib/calendar'
 
 interface EventDialogProps {
@@ -14,15 +14,31 @@ interface EventDialogProps {
   selectedDate: Date | null
   members: FamilyMember[]
   editEvent?: CalendarEvent | null
+  disableRecurrenceEditing?: boolean
 }
 
-export function EventDialog({ open, onOpenChange, onSave, selectedDate, members, editEvent }: EventDialogProps) {
+export function EventDialog({
+  open,
+  onOpenChange,
+  onSave,
+  selectedDate,
+  members,
+  editEvent,
+  disableRecurrenceEditing = false,
+}: EventDialogProps) {
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [description, setDescription] = useState('')
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>('weekly')
+  const [interval, setInterval] = useState('1')
+  const [selectedDays, setSelectedDays] = useState<number[]>([])
+  const [endType, setEndType] = useState<RecurrenceEndType>('none')
+  const [endDate, setEndDate] = useState('')
+  const [endCount, setEndCount] = useState('')
 
   useEffect(() => {
     if (editEvent) {
@@ -32,6 +48,13 @@ export function EventDialog({ open, onOpenChange, onSave, selectedDate, members,
       setEndTime(editEvent.endTime || '')
       setDescription(editEvent.description || '')
       setSelectedMembers(editEvent.memberIds)
+      setIsRecurring(Boolean(editEvent.recurrence))
+      setFrequency(editEvent.recurrence?.frequency || 'weekly')
+      setInterval(String(editEvent.recurrence?.interval || 1))
+      setSelectedDays(editEvent.recurrence?.selectedDays || [])
+      setEndType(editEvent.recurrence?.endType || 'none')
+      setEndDate(editEvent.recurrence?.endDate || '')
+      setEndCount(editEvent.recurrence?.endCount ? String(editEvent.recurrence.endCount) : '')
     } else if (selectedDate) {
       setTitle('')
       setDate(formatDate(selectedDate))
@@ -39,11 +62,33 @@ export function EventDialog({ open, onOpenChange, onSave, selectedDate, members,
       setEndTime('')
       setDescription('')
       setSelectedMembers([])
+      setIsRecurring(false)
+      setFrequency('weekly')
+      setInterval('1')
+      setSelectedDays([])
+      setEndType('none')
+      setEndDate('')
+      setEndCount('')
     }
   }, [editEvent, selectedDate, open])
 
   const handleSave = () => {
     if (!title.trim() || !date) return
+
+    const parsedInterval = Math.max(1, parseInt(interval, 10) || 1)
+    const parsedCount = Math.max(1, parseInt(endCount, 10) || 1)
+    const recurrence = isRecurring && !disableRecurrenceEditing
+      ? {
+          frequency,
+          interval: parsedInterval,
+          selectedDays: frequency === 'weekly'
+            ? (selectedDays.length > 0 ? selectedDays : [new Date(date).getDay()])
+            : undefined,
+          endType,
+          endDate: endType === 'date' ? endDate : undefined,
+          endCount: endType === 'count' ? parsedCount : undefined,
+        }
+      : undefined
 
     onSave({
       title: title.trim(),
@@ -52,6 +97,9 @@ export function EventDialog({ open, onOpenChange, onSave, selectedDate, members,
       endTime: endTime || undefined,
       description: description.trim() || undefined,
       memberIds: selectedMembers,
+      recurrence,
+      seriesId: recurrence ? (editEvent?.seriesId || editEvent?.id || Date.now().toString()) : undefined,
+      seriesExceptions: recurrence ? (editEvent?.seriesExceptions || []) : undefined,
     })
 
     onOpenChange(false)
@@ -61,6 +109,10 @@ export function EventDialog({ open, onOpenChange, onSave, selectedDate, members,
     setSelectedMembers((prev) =>
       prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
     )
+  }
+
+  const toggleDay = (day: number) => {
+    setSelectedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]))
   }
 
   return (
@@ -145,6 +197,114 @@ export function EventDialog({ open, onOpenChange, onSave, selectedDate, members,
               placeholder="Add any additional details..."
               rows={3}
             />
+          </div>
+
+          <div className="grid gap-3 border rounded-lg p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="is-recurring">Recurrence</Label>
+              <input
+                id="is-recurring"
+                type="checkbox"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                disabled={disableRecurrenceEditing}
+                className="h-4 w-4"
+              />
+            </div>
+
+            {isRecurring && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-frequency">Frequency</Label>
+                  <select
+                    id="recurrence-frequency"
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}
+                    disabled={disableRecurrenceEditing}
+                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-interval">Repeat every</Label>
+                  <Input
+                    id="recurrence-interval"
+                    type="number"
+                    min={1}
+                    value={interval}
+                    onChange={(e) => setInterval(e.target.value)}
+                    disabled={disableRecurrenceEditing}
+                  />
+                </div>
+
+                {frequency === 'weekly' && (
+                  <div className="grid gap-2">
+                    <Label>Days of week</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, dayIndex) => (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => toggleDay(dayIndex)}
+                          disabled={disableRecurrenceEditing}
+                          aria-pressed={selectedDays.includes(dayIndex)}
+                          className="px-3 py-1 rounded border text-sm"
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-end-type">Ends</Label>
+                  <select
+                    id="recurrence-end-type"
+                    value={endType}
+                    onChange={(e) => setEndType(e.target.value as RecurrenceEndType)}
+                    disabled={disableRecurrenceEditing}
+                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="none">Never (2-year horizon)</option>
+                    <option value="date">On date</option>
+                    <option value="count">After occurrences</option>
+                  </select>
+                </div>
+
+                {endType === 'date' && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="recurrence-end-date">End date</Label>
+                    <Input
+                      id="recurrence-end-date"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      disabled={disableRecurrenceEditing}
+                    />
+                  </div>
+                )}
+
+                {endType === 'count' && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="recurrence-end-count">Number of occurrences</Label>
+                    <Input
+                      id="recurrence-end-count"
+                      type="number"
+                      min={1}
+                      value={endCount}
+                      onChange={(e) => setEndCount(e.target.value)}
+                      disabled={disableRecurrenceEditing}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
         <DialogFooter>
