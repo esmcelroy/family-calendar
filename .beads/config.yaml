@@ -50,3 +50,7 @@ backup:
 # - linear.api-key
 # - github.org
 # - github.repo
+
+# Pin Dolt server to a fixed port (prevents port-change warnings on auto-restart)
+dolt:
+  port: 60995

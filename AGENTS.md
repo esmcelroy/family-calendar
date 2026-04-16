@@ -23,6 +23,17 @@ bd graph --all --html > /tmp/bd-board.html && open /tmp/bd-board.html
 This opens a self-contained D3.js HTML visualization in your browser.
 For a text summary: `bd list --status=open` or `bd status`.
 
+## Fresh Clone / System Restart Recovery
+
+Beads uses a Dolt SQL server (`bd dolt status` to check). On a fresh clone or if the DB is empty:
+
+```bash
+bd import .beads/backup/issues.jsonl   # Restore 58 issues from git-tracked JSONL
+bd info                                # Verify issue count
+```
+
+The server auto-starts on demand at port 60995 (pinned in `.beads/config.yaml`).
+
 ## Session Close — Portable Export
 
 **Do NOT use `bd dolt push`** — no Dolt remote is configured; the command will error.
