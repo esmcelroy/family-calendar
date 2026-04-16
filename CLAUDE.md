@@ -35,7 +35,9 @@ bd close <id>         # Complete work
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd dolt push
+   bd export -o .beads/backup/issues.jsonl
+   git add .beads/backup/issues.jsonl
+   git diff --cached --quiet || git commit -m "beads: export issues snapshot"
    git push
    git status  # MUST show "up to date with origin"
    ```

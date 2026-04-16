@@ -9,7 +9,31 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+bd graph --all --html > /tmp/bd-board.html && open /tmp/bd-board.html  # View board
+```
+
+## Viewing Boards
+
+There is no `bd board` command. To view issues as an interactive dependency graph:
+
+```bash
+bd graph --all --html > /tmp/bd-board.html && open /tmp/bd-board.html
+```
+
+This opens a self-contained D3.js HTML visualization in your browser.
+For a text summary: `bd list --status=open` or `bd status`.
+
+## Session Close — Portable Export
+
+**Do NOT use `bd dolt push`** — no Dolt remote is configured; the command will error.
+Instead, export the JSONL snapshot and commit it with git:
+
+```bash
+git pull --rebase
+bd export -o .beads/backup/issues.jsonl
+git add .beads/backup/issues.jsonl
+git diff --cached --quiet || git commit -m "beads: export issues snapshot"
+git push
 ```
 
 ## Non-Interactive Shell Commands
@@ -69,7 +93,9 @@ bd close <id>         # Complete work
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd dolt push
+   bd export -o .beads/backup/issues.jsonl  # Export beads snapshot
+   git add .beads/backup/issues.jsonl
+   git diff --cached --quiet || git commit -m "beads: export issues snapshot"
    git push
    git status  # MUST show "up to date with origin"
    ```
