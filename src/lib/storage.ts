@@ -40,6 +40,8 @@ export interface StorageAdapter {
 export const STORAGE_KEYS = {
   events: 'family-calendar:events',
   members: 'family-calendar:members',
+  smtpConfig: 'family-calendar:smtp-config',
+  organizerConfig: 'family-calendar:organizer-config',
 } as const
 
 /** Union of all known storage key strings. */

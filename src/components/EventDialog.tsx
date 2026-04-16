@@ -4,8 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CalendarEvent, FamilyMember, RecurrenceEndType, RecurrenceFrequency } from '@/lib/types'
 import { formatDate } from '@/lib/calendar'
+import { getMembersWithoutEmail } from '@/lib/invitations'
+import { Warning } from '@phosphor-icons/react'
 
 interface EventDialogProps {
   open: boolean
@@ -182,10 +185,27 @@ export function EventDialog({
                     }}
                   >
                     {member.name}
+                    {!member.email && (
+                      <span className="ml-1 text-amber-400" aria-label="no email configured">●</span>
+                    )}
                   </button>
                 ))}
               </div>
             )}
+            {(() => {
+              const noEmail = getMembersWithoutEmail(
+                { id: '', title: '', date: '', memberIds: selectedMembers },
+                members,
+              )
+              return noEmail.length > 0 ? (
+                <Alert variant="default" className="border-amber-400/50 bg-amber-50/50 dark:bg-amber-900/10 py-2 px-3">
+                  <Warning size={14} className="text-amber-500 mt-0.5" weight="fill" aria-hidden="true" />
+                  <AlertDescription className="text-xs text-amber-700 dark:text-amber-400 ml-1">
+                    {noEmail.map((m) => m.name).join(', ')} {noEmail.length === 1 ? 'has' : 'have'} no email address — no invitation will be sent.
+                  </AlertDescription>
+                </Alert>
+              ) : null
+            })()}
           </div>
 
           <div className="grid gap-2">
