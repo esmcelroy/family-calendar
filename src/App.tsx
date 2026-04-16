@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLocalStorage } from '@/hooks/use-local-storage'
+import { useSendInvitations } from '@/hooks/use-send-invitations'
 import { STORAGE_KEYS } from '@/lib/storage'
 import { CalendarEvent, FamilyMember, RecurringEditScope, SeriesException } from '@/lib/types'
 import { CalendarGrid } from '@/components/CalendarGrid'
@@ -35,6 +36,7 @@ function App() {
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const shouldReduceMotion = useReducedMotion()
   const expandedEvents = expandRecurringEvents(events || [], currentDate)
+  const { sendInvitations } = useSendInvitations()
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))
@@ -57,6 +59,13 @@ function App() {
   const handleEventClick = (event: CalendarEvent) => {
     setSelectedEvent(event)
     setShowDetailsDialog(true)
+  }
+
+  const notifyDelivery = (results: import('@/lib/types').DeliveryResult[]) => {
+    const failed = results.filter((r) => r.status === 'failed')
+    if (failed.length > 0) {
+      toast.error(`Failed to send invitation to: ${failed.map((r) => r.recipientEmail).join(', ')}`)
+    }
   }
 
   const handleSaveEvent = (eventData: Omit<CalendarEvent, 'id'>) => {
@@ -89,6 +98,10 @@ function App() {
             }
           })
         )
+        const instanceEvent: CalendarEvent = { ...eventData, id: sourceId, date: occurrenceDate }
+        const seq = (instanceEvent.sequence ?? 0) + 1
+        sendInvitations(instanceEvent, members || [], 'REQUEST', seq, occurrenceDate)
+          .then(notifyDelivery)
         toast.success('Occurrence updated')
       } else if (editingScope === 'following') {
         setEvents((currentEvents) => {
@@ -115,6 +128,7 @@ function App() {
             recurrence: eventData.recurrence || sourceEvent.recurrence,
             seriesId: newSeriesId,
             seriesExceptions: [],
+            sequence: 0,
           }
 
           return (currentEvents || []).map((event) => (event.id === sourceId ? updatedSource : event)).concat(newEvent)
@@ -129,16 +143,24 @@ function App() {
                   id: sourceId,
                   seriesId: event.seriesId || sourceId,
                   seriesExceptions: event.seriesExceptions || [],
+                  sequence: (event.sequence ?? 0) + 1,
                 }
               : event
           )
         )
+        const updatedEvent: CalendarEvent = { ...eventData, id: sourceId, sequence: (editingEvent.sequence ?? 0) + 1 }
+        sendInvitations(updatedEvent, members || [], 'REQUEST', updatedEvent.sequence!)
+          .then(notifyDelivery)
         toast.success('Series updated')
       }
     } else if (editingEvent) {
+      const newSeq = (editingEvent.sequence ?? 0) + 1
       setEvents((currentEvents) =>
-        (currentEvents || []).map((e) => (e.id === editingEvent.id ? { ...eventData, id: editingEvent.id } : e))
+        (currentEvents || []).map((e) => (e.id === editingEvent.id ? { ...eventData, id: editingEvent.id, sequence: newSeq } : e))
       )
+      const updatedEvent: CalendarEvent = { ...eventData, id: editingEvent.id, sequence: newSeq }
+      sendInvitations(updatedEvent, members || [], 'REQUEST', newSeq)
+        .then(notifyDelivery)
       toast.success('Event updated')
     } else {
       const newId = generateId()
@@ -146,8 +168,11 @@ function App() {
         ...eventData,
         id: newId,
         seriesId: eventData.recurrence ? (eventData.seriesId || newId) : undefined,
+        sequence: 0,
       }
       setEvents((currentEvents) => [...(currentEvents || []), newEvent])
+      sendInvitations(newEvent, members || [], 'REQUEST', 0)
+        .then(notifyDelivery)
       toast.success('Event added')
     }
     setEditingEvent(null)
@@ -181,6 +206,7 @@ function App() {
       if (selectedEvent.recurrenceMeta) {
         const sourceId = selectedEvent.recurrenceMeta.sourceEventId
         const occurrenceDate = selectedEvent.recurrenceMeta.occurrenceDate
+        const sourceEvent = (events || []).find((e) => e.id === sourceId)
         if (scope === 'this') {
           setEvents((currentEvents) =>
             (currentEvents || []).map((event) => {
@@ -190,6 +216,11 @@ function App() {
               return { ...event, seriesExceptions: exceptions }
             })
           )
+          if (sourceEvent) {
+            const instanceEvent: CalendarEvent = { ...sourceEvent, id: sourceId, date: occurrenceDate }
+            const seq = (sourceEvent.sequence ?? 0) + 1
+            sendInvitations(instanceEvent, members || [], 'CANCEL', seq, occurrenceDate).then(notifyDelivery)
+          }
           toast.success('Occurrence deleted')
         } else if (scope === 'following') {
           const previousDay = new Date(occurrenceDate)
@@ -211,10 +242,16 @@ function App() {
           )
           toast.success('Deleted this and following occurrences')
         } else {
+          if (sourceEvent) {
+            const seq = (sourceEvent.sequence ?? 0) + 1
+            sendInvitations(sourceEvent, members || [], 'CANCEL', seq).then(notifyDelivery)
+          }
           setEvents((currentEvents) => (currentEvents || []).filter((event) => event.id !== sourceId))
           toast.success('Series deleted')
         }
       } else {
+        const seq = (selectedEvent.sequence ?? 0) + 1
+        sendInvitations(selectedEvent, members || [], 'CANCEL', seq).then(notifyDelivery)
         setEvents((currentEvents) => (currentEvents || []).filter((e) => e.id !== selectedEvent.id))
         toast.success('Event deleted')
       }
@@ -228,6 +265,12 @@ function App() {
       id: generateId(),
     }
     setMembers((currentMembers) => [...(currentMembers || []), newMember])
+  }
+
+  const handleUpdateMember = (id: string, updates: Partial<Omit<FamilyMember, 'id'>>) => {
+    setMembers((currentMembers) =>
+      (currentMembers || []).map((m) => (m.id === id ? { ...m, ...updates } : m))
+    )
   }
 
   const handleDeleteMember = (id: string) => {
@@ -415,6 +458,7 @@ function App() {
         members={members || []}
         onAddMember={handleAddMember}
         onDeleteMember={handleDeleteMember}
+        onUpdateMember={handleUpdateMember}
       />
 
       <Toaster position="bottom-right" />

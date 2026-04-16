@@ -2,9 +2,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { CalendarEvent, FamilyMember, RecurringEditScope } from '@/lib/types'
 import { formatRecurrencePattern, formatTime } from '@/lib/calendar'
-import { Pencil, Trash, Clock, Users } from '@phosphor-icons/react'
+import { Pencil, Trash, Clock, Users, GoogleLogo } from '@phosphor-icons/react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useState } from 'react'
+import { buildGCalUrl } from '@/lib/gcal'
 
 interface EventDetailsDialogProps {
   event: CalendarEvent | null
@@ -107,19 +108,30 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
               </div>
             )}
           </div>
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 flex-wrap">
             <Button
               variant="outline"
+              size="sm"
               className="gap-2"
-              onClick={() => (isRecurringInstance ? setShowDeleteScope(true) : setShowDeleteConfirm(true))}
+              onClick={() => window.open(buildGCalUrl(event), '_blank')}
             >
-              <Trash size={18} />
-              Delete
+              <GoogleLogo size={16} />
+              Add to Google Calendar
             </Button>
-            <Button className="gap-2" onClick={() => (isRecurringInstance ? setShowEditScope(true) : onEdit('all'))}>
-              <Pencil size={18} />
-              Edit
-            </Button>
+            <div className="flex gap-2 ml-auto">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => (isRecurringInstance ? setShowDeleteScope(true) : setShowDeleteConfirm(true))}
+              >
+                <Trash size={18} />
+                Delete
+              </Button>
+              <Button className="gap-2" onClick={() => (isRecurringInstance ? setShowEditScope(true) : onEdit('all'))}>
+                <Pencil size={18} />
+                Edit
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

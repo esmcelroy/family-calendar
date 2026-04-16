@@ -1,7 +1,13 @@
+export type CalendarPlatform = 'google' | 'apple' | 'outlook' | 'other'
+
 export interface FamilyMember {
   id: string
   name: string
   color: string
+  /** Optional email for iMIP invitation delivery */
+  email?: string
+  /** Preferred calendar platform — used to personalise invitation emails */
+  preferredPlatform?: CalendarPlatform
 }
 
 export interface CalendarEvent {
@@ -16,6 +22,8 @@ export interface CalendarEvent {
   recurrence?: RecurrenceRule
   seriesExceptions?: SeriesException[]
   recurrenceMeta?: RecurrenceMeta
+  /** Incremented on each edit; used in iMIP SEQUENCE field */
+  sequence?: number
 }
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
@@ -45,6 +53,43 @@ export interface RecurrenceMeta {
 }
 
 export type RecurringEditScope = 'this' | 'following' | 'all'
+
+// ---------------------------------------------------------------------------
+// Spec 013 — Event Invitations & Delivery
+// ---------------------------------------------------------------------------
+
+export interface SmtpConfig {
+  host: string
+  port: number
+  secure: boolean
+  username: string
+  password: string
+  fromAddress: string
+  fromName: string
+}
+
+export interface OrganizerConfig {
+  name: string
+  email: string
+}
+
+/** Transient object representing one outbound iMIP message. */
+export interface Invitation {
+  recipientEmail: string
+  recipientName: string
+  recipientPlatform?: CalendarPlatform
+  icsPayload: string
+  method: 'REQUEST' | 'CANCEL'
+  eventId: string
+  sequence: number
+  gcalUrl?: string
+}
+
+export interface DeliveryResult {
+  status: 'sent' | 'failed' | 'skipped'
+  recipientEmail: string
+  error?: string
+}
 
 export const MEMBER_COLORS = [
   { name: 'Sky', value: 'oklch(0.65 0.18 240)' },

@@ -1,6 +1,10 @@
 import { CalendarEvent, FamilyMember } from './types'
 import { toRRule } from './calendar'
 
+// ---------------------------------------------------------------------------
+// RFC 5545 iCalendar bulk export (METHOD:PUBLISH)
+// ---------------------------------------------------------------------------
+
 /**
  * Converts events to iCalendar (RFC 5545) format
  * @param events - Array of calendar events to export
@@ -200,4 +204,118 @@ export function downloadICalendar(content: string, filename: string = 'family-ca
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+// ---------------------------------------------------------------------------
+// RFC 5546 iMIP — single-event invitation ICS (METHOD:REQUEST / METHOD:CANCEL)
+// ---------------------------------------------------------------------------
+
+/**
+ * Folds long iCalendar content lines at 75 octets per RFC 5545 §3.1.
+ * Continuation lines begin with a single SPACE character.
+ */
+function foldLine(line: string): string {
+  if (line.length <= 75) return line
+  const chunks: string[] = []
+  chunks.push(line.slice(0, 75))
+  let i = 75
+  while (i < line.length) {
+    chunks.push(' ' + line.slice(i, i + 74))
+    i += 74
+  }
+  return chunks.join('\r\n')
+}
+
+/**
+ * Generates a single-event iMIP ICS string suitable for use as an email attachment.
+ *
+ * @param event - The calendar event to send
+ * @param recipients - Family members to include as ATTENDEEs (organiser should be excluded before calling)
+ * @param organizerName - Display name of the organiser
+ * @param organizerEmail - Email address of the organiser
+ * @param method - 'REQUEST' for create/update; 'CANCEL' for deletion
+ * @param sequence - Monotonically increasing integer (start at 0, increment on each edit)
+ * @param recurrenceId - ISO date string for instance-level edits on a recurring series
+ */
+export function generateInvitationIcs(
+  event: CalendarEvent,
+  recipients: FamilyMember[],
+  organizerName: string,
+  organizerEmail: string,
+  method: 'REQUEST' | 'CANCEL',
+  sequence: number,
+  recurrenceId?: string,
+): string {
+  const lines: string[] = []
+
+  lines.push('BEGIN:VCALENDAR')
+  lines.push('VERSION:2.0')
+  lines.push('PRODID:-//Family Calendar//EN')
+  lines.push('CALSCALE:GREGORIAN')
+  lines.push(`METHOD:${method}`)
+
+  lines.push('BEGIN:VEVENT')
+  lines.push(`UID:${event.seriesId || event.id}@family-calendar`)
+  lines.push(`DTSTAMP:${formatICalDateTime(new Date())}`)
+  lines.push(`SEQUENCE:${sequence}`)
+
+  if (method === 'CANCEL') {
+    lines.push('STATUS:CANCELLED')
+  }
+
+  const eventDate = new Date(event.date)
+
+  if (event.startTime) {
+    const startDt = combineDateTime(eventDate, event.startTime)
+    lines.push(`DTSTART:${formatICalDateTime(startDt)}`)
+    if (event.endTime) {
+      const endDt = combineDateTime(eventDate, event.endTime)
+      if (endDt < startDt) endDt.setDate(endDt.getDate() + 1)
+      lines.push(`DTEND:${formatICalDateTime(endDt)}`)
+    } else {
+      lines.push(`DTEND:${formatICalDateTime(new Date(startDt.getTime() + 3600_000))}`)
+    }
+  } else {
+    lines.push(`DTSTART;VALUE=DATE:${formatICalDate(eventDate)}`)
+    const nextDay = new Date(eventDate)
+    nextDay.setDate(nextDay.getDate() + 1)
+    lines.push(`DTEND;VALUE=DATE:${formatICalDate(nextDay)}`)
+  }
+
+  lines.push(`SUMMARY:${escapeICalText(event.title)}`)
+
+  if (event.description) {
+    lines.push(`DESCRIPTION:${escapeICalText(event.description)}`)
+  }
+
+  lines.push(`ORGANIZER;CN=${escapeICalText(organizerName)}:mailto:${organizerEmail}`)
+
+  for (const member of recipients) {
+    if (member.email) {
+      lines.push(`ATTENDEE;CN=${escapeICalText(member.name)};ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${member.email}`)
+    }
+  }
+
+  if (event.recurrence && !recurrenceId) {
+    lines.push(`RRULE:${toRRule(event.recurrence)}`)
+    const deletedDates = (event.seriesExceptions || [])
+      .filter((ex) => ex.type === 'deleted')
+      .map((ex) => formatICalDate(new Date(ex.date)))
+    if (deletedDates.length > 0) {
+      lines.push(`EXDATE;VALUE=DATE:${deletedDates.join(',')}`)
+    }
+  }
+
+  if (recurrenceId) {
+    if (event.startTime) {
+      lines.push(`RECURRENCE-ID:${formatICalDateTime(combineDateTime(new Date(recurrenceId), event.startTime))}`)
+    } else {
+      lines.push(`RECURRENCE-ID;VALUE=DATE:${formatICalDate(new Date(recurrenceId))}`)
+    }
+  }
+
+  lines.push('END:VEVENT')
+  lines.push('END:VCALENDAR')
+
+  return lines.map(foldLine).join('\r\n')
 }
