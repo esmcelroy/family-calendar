@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CalendarEvent, FamilyMember, KioskConfig } from '@/lib/types'
 import { STORAGE_KEYS, localStorageAdapter } from '@/lib/storage'
 import { useLocalStorage } from '@/hooks/use-local-storage'
 import { expandRecurringEvents, formatDate, formatTime, sortEventsByTime } from '@/lib/calendar'
-import { Clock, CalendarBlank, Warning } from '@phosphor-icons/react'
+import { Clock, CalendarBlank } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 const DEFAULT_KIOSK_CONFIG: KioskConfig = {
@@ -11,6 +11,7 @@ const DEFAULT_KIOSK_CONFIG: KioskConfig = {
   refreshIntervalMs: 300_000,
 }
 
+const MIN_REFRESH_INTERVAL_MS = 5_000
 const MAX_TODAY_EVENTS = 8
 const MAX_UPCOMING_EVENTS = 12
 
@@ -135,16 +136,10 @@ export function KioskView() {
   )
 
   const [now, setNow] = useState(new Date())
-  const [syncError, setSyncError] = useState(false)
 
   const refresh = useCallback(() => {
-    try {
-      setEvents(localStorageAdapter.get<CalendarEvent[]>(STORAGE_KEYS.events, []))
-      setMembers(localStorageAdapter.get<FamilyMember[]>(STORAGE_KEYS.members, []))
-      setSyncError(false)
-    } catch {
-      setSyncError(true)
-    }
+    setEvents(localStorageAdapter.get<CalendarEvent[]>(STORAGE_KEYS.events, []))
+    setMembers(localStorageAdapter.get<FamilyMember[]>(STORAGE_KEYS.members, []))
   }, [])
 
   // Live clock — ticks every minute and updates today's date if day rolls over
@@ -155,8 +150,15 @@ export function KioskView() {
     return () => clearInterval(timer)
   }, [])
 
-  // Auto-refresh data from localStorage at the configured interval
-  const refreshIntervalMs = kioskConfig?.refreshIntervalMs ?? DEFAULT_KIOSK_CONFIG.refreshIntervalMs
+  // Auto-refresh data from localStorage at the configured interval.
+  // Clamp to a minimum to prevent tight loops if the stored value is invalid.
+  const rawInterval = kioskConfig?.refreshIntervalMs
+  const refreshIntervalMs = Math.max(
+    MIN_REFRESH_INTERVAL_MS,
+    Number.isFinite(Number(rawInterval)) && Number(rawInterval) > 0
+      ? Number(rawInterval)
+      : DEFAULT_KIOSK_CONFIG.refreshIntervalMs,
+  )
   useEffect(() => {
     const interval = setInterval(refresh, refreshIntervalMs)
     return () => clearInterval(interval)
@@ -185,9 +187,23 @@ export function KioskView() {
   }, [refresh])
 
   const allMembers = members
-  const memberFilter = kioskConfig.memberFilter
+  // Normalize memberFilter — guard against missing/non-array values from persisted JSON
+  const memberFilter: string[] = Array.isArray(kioskConfig?.memberFilter)
+    ? kioskConfig.memberFilter
+    : []
 
-  const expandedEvents = expandRecurringEvents(events, now)
+  // Memoize event expansion: only recompute when events change or the date rolls over.
+  // Use start-of-day as reference so minute clock ticks don't trigger expensive re-expansion.
+  const startOfDay = useMemo(() => {
+    const d = new Date(now)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [formatDate(now)]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const expandedEvents = useMemo(
+    () => expandRecurringEvents(events, startOfDay),
+    [events, startOfDay],
+  )
 
   // Apply member filter if configured
   const filteredEvents =
@@ -200,16 +216,14 @@ export function KioskView() {
   const todayVisible = todayEvents.slice(0, MAX_TODAY_EVENTS)
   const todayOverflow = todayEvents.length - todayVisible.length
 
-  // Upcoming: next 7 days (not including today)
+  // Upcoming: next 7 days (not including today) — always include all 7 so empty days show "Nothing scheduled"
   const upcomingDays: { date: Date; events: CalendarEvent[] }[] = []
   for (let i = 1; i <= 7; i++) {
     const d = new Date(now)
     d.setDate(d.getDate() + i)
     const dStr = formatDate(d)
-    const dayEvents = filteredEvents.filter((ev) => ev.date === dStr)
-    if (dayEvents.length > 0) {
-      upcomingDays.push({ date: d, events: dayEvents })
-    }
+    const dayEvents = sortEventsByTime(filteredEvents.filter((ev) => ev.date === dStr))
+    upcomingDays.push({ date: d, events: dayEvents })
   }
   const visibleUpcomingDays = upcomingDays.slice(0, MAX_UPCOMING_EVENTS)
 
@@ -225,16 +239,6 @@ export function KioskView() {
           <p className="text-xl font-medium text-muted-foreground">{formatFullDate(now)}</p>
         </div>
         <div className="flex items-center gap-3">
-          {syncError && (
-            <span
-              className="flex items-center gap-1 text-amber-500 text-sm"
-              aria-label="Sync warning: showing last cached data"
-              title="Could not sync latest data — showing last cached events"
-            >
-              <Warning size={18} aria-hidden="true" />
-              <span className="hidden sm:inline">Sync issue</span>
-            </span>
-          )}
           <div
             className="flex items-center gap-2 text-4xl font-bold tabular-nums"
             aria-live="polite"

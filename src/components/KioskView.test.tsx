@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { KioskView } from './KioskView'
 import type { CalendarEvent, FamilyMember, KioskConfig } from '@/lib/types'
 import { STORAGE_KEYS } from '@/lib/storage'
+import { formatDate } from '@/lib/calendar'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -21,23 +22,15 @@ function seedLocalStorage(
   localStorage.setItem(STORAGE_KEYS.kioskConfig, JSON.stringify(cfg))
 }
 
+// Use formatDate (UTC-based, matches how events are stored in production)
 function todayStr(): string {
-  const d = new Date()
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-')
+  return formatDate(new Date())
 }
 
 function inNDays(n: number): string {
   const d = new Date()
   d.setDate(d.getDate() + n)
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-')
+  return formatDate(d)
 }
 
 // ─── tests ───────────────────────────────────────────────────────────────────
@@ -110,19 +103,20 @@ describe('KioskView', () => {
   })
 
   it('updates the clock every minute', () => {
+    vi.setSystemTime(new Date('2026-04-16T10:00:00'))
     seedLocalStorage()
     render(<KioskView />)
 
-    const before = screen.getByLabelText(/current time/i).textContent
+    const labelBefore = screen.getByLabelText(/current time/i).textContent ?? ''
+    expect(labelBefore).toMatch(/10:00 AM/i)
 
     act(() => {
       vi.advanceTimersByTime(60_000)
     })
 
-    // The label element should still be in the document (clock still renders)
-    expect(screen.getByLabelText(/current time/i)).toBeInTheDocument()
-    // Value should exist (it's a time string)
-    expect(before).toBeTruthy()
+    const labelAfter = screen.getByLabelText(/current time/i).textContent ?? ''
+    expect(labelAfter).toMatch(/10:01 AM/i)
+    expect(labelAfter).not.toBe(labelBefore)
   })
 
   it('filters events by memberFilter when configured', () => {
@@ -157,11 +151,13 @@ describe('KioskView', () => {
     expect(screen.getByText('Bob Only')).toBeInTheDocument()
   })
 
-  it('shows empty-state for upcoming when no future events exist', () => {
+  it('shows "Nothing scheduled" for each empty upcoming day when no future events exist', () => {
     seedLocalStorage()
     render(<KioskView />)
 
-    expect(screen.getByText(/nothing coming up/i)).toBeInTheDocument()
+    // All 7 upcoming days are always rendered; each empty day shows "Nothing scheduled"
+    const nothingScheduled = screen.getAllByText(/nothing scheduled/i)
+    expect(nothingScheduled.length).toBeGreaterThan(0)
   })
 
   it('displays event start time when provided', () => {
