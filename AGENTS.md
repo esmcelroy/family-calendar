@@ -28,7 +28,7 @@ For a text summary: `bd list --status=open` or `bd status`.
 Beads uses a Dolt SQL server (`bd dolt status` to check). On a fresh clone or if the DB is empty:
 
 ```bash
-bd import .beads/backup/issues.jsonl   # Restore 58 issues from git-tracked JSONL
+bd import .beads/backup/issues.jsonl   # Restore issues from git-tracked JSONL
 bd info                                # Verify issue count
 ```
 
