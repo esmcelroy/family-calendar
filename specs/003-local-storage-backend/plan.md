@@ -21,7 +21,7 @@ No data migration is required. Key names change from `family-events` / `family-m
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x (strict mode)  
-**Primary Dependencies**: React 19, Vite, `@github/spark` (being removed from persistence paths), Tailwind CSS v4, shadcn/ui  
+**Primary Dependencies**: React 19, Vite, Tailwind CSS v4, shadcn/ui
 **Storage**: `window.localStorage` (browser-native; no new packages required)  
 **Testing**: Vitest (configured by spec 006; test file targets noted in each phase below)  
 **Target Platform**: Browser only (no SSR; `window.localStorage` is always available at runtime per spec assumption)  
@@ -106,7 +106,7 @@ src/__tests__/                   # (created by spec 006; plan notes target files
 | Error handling | Try/catch in adapter `set`; `console.warn` + silent no-op on quota/access errors | Matches spec FR-008; avoids crashing the app on write failure |
 | SSR guard | `typeof window !== 'undefined'` check in adapter | Zero-cost; future-proofs if Vite SSR is ever added |
 | Key naming | `family-calendar:events` and `family-calendar:members` | Namespaced to prevent collision with other apps at same origin |
-| `@github/spark` removal | Remove import from `App.tsx` only; package itself can stay in `package.json` until no other usages exist | `grep` confirms `useKV` is the only Spark API in use in persistence paths |
+| `@github/spark` removal | The original plan removed only the persistence hook; follow-up portability cleanup removed remaining runtime and build-tool dependencies | The app builds and tests without the Spark package |
 
 ---
 

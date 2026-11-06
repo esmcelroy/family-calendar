@@ -56,7 +56,7 @@ Five specialist personas are available as agents and prompts. Invoke them at key
 |-------|------------|
 | `ux-reviewer` | After building or changing a UI feature — validate against the welcoming/organized/playful design direction |
 | `a11y-auditor` | Before shipping any feature — verify WCAG 2.1 AA compliance and multi-generational usability |
-| `code-reviewer` | After implementation — review TypeScript quality, React patterns, and `useKV` usage |
+| `code-reviewer` | After implementation — review TypeScript quality, React patterns, and persistent state usage |
 | `qa-tester` | After a spec exists — generate Vitest test cases mapped to success criteria and PRD edge cases |
 | `design-guardian` | When touching components — enforce color tokens, typography scale, spacing, Phosphor icons, and animation timing |
 
@@ -76,7 +76,7 @@ speckit.specify → speckit.plan → speckit.tasks → speckit.implement
 
 - `design-guardian`: icons must come from `@phosphor-icons/react` only — not Lucide or Heroicons
 - `a11y-auditor`: color coding must never be the *sole* differentiator — labels must accompany color
-- `code-reviewer`: `useKV` is the source of truth for persistent state; do not duplicate with `useState`
+- `code-reviewer`: `useLocalStorage` and `StorageAdapter` are the source of truth for persistent browser state; do not duplicate with `useState`
 - `qa-tester`: always cover the 6 PRD edge case categories (empty states, date boundaries, long text, overlapping events, past events, no-members fallback)
 - `ux-reviewer`: all touch targets must be ≥44×44px; animations stay in the 200–300ms window
 
@@ -176,7 +176,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 - Icons: **`@phosphor-icons/react` only** — do not use Lucide or Heroicons
 
 ### State management
-- `useKV` (from `@github/spark/hooks`) is the source of truth for **persistent** state — do not duplicate with `useState`
+- `useLocalStorage` (backed by `StorageAdapter`) is the source of truth for **persistent browser state** — do not duplicate with `useState`
 - Use React hooks (`useState`, `useEffect`) for transient/local UI state
 - `@tanstack/react-query` for async data fetching
 

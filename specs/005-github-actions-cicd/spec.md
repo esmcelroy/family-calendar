@@ -25,7 +25,7 @@ When a contributor opens or updates a pull request, a CI workflow automatically 
 
 ### User Story 2 - Tests Run Automatically on Every Push (Priority: P2)
 
-When the testing framework (spec 006) is in place, CI automatically runs the test suite. A failing test blocks merge.
+CI automatically runs the test suite. A failing test blocks merge.
 
 **Why this priority**: Automated test runs are the purpose of setting up tests; manual test runs defeat the value of the testing framework.
 
@@ -39,17 +39,17 @@ When the testing framework (spec 006) is in place, CI automatically runs the tes
 
 ---
 
-### User Story 3 - Main Branch Builds Are Deployed Automatically (Priority: P3)
+### User Story 3 - Main Branch Deployment Supports the Full Application (Priority: P3)
 
-When a PR is merged to `main`, a deployment workflow runs and the latest version of the app is available at the deployment URL within a predictable time window.
+When the production hosting target is selected for the full application, a merge to `main` can deploy the frontend and backend together, including the database-backed configuration storage the product will require.
 
-**Why this priority**: Manual deployment steps are error-prone and slow; continuous deployment to a preview/staging environment accelerates feedback.
+**Why this priority**: The product is expected to grow beyond a standalone SPA. A static-only deployment would not provide the backend or persistent configuration storage required by the planned application.
 
-**Independent Test**: Merge a change to `main`. Confirm the deploy workflow succeeds and the live URL reflects the merged change.
+**Independent Test**: After a full-stack hosting target is selected and configured, merge a change to `main`. Confirm the deploy workflow succeeds and the live application reflects the merged change.
 
 **Acceptance Scenarios**:
 
-1. **Given** a merge to `main`, **When** the deploy workflow runs, **Then** the app is published to the configured hosting target.
+1. **Given** a full-stack deployment target is configured, **When** a commit is pushed to `main`, **Then** the frontend and backend are published to that target.
 2. **Given** the deploy step fails, **When** the workflow errors, **Then** the team is notified via the GitHub Actions check failure UI.
 
 ---
@@ -58,7 +58,7 @@ When a PR is merged to `main`, a deployment workflow runs and the latest version
 
 - What if CI runs when `package-lock.json` is inconsistent with `package.json`? The CI install step should use `npm ci` (not `npm install`) to enforce lock file consistency.
 - What if secrets (API keys, tokens) are needed in CI? Secrets MUST be stored in GitHub Actions secrets only — never hard-coded in workflow files.
-- What if the deployment target is not yet decided? The deploy job should be a placeholder stub that can be enabled later; the CI job (build + lint + test) is independently valuable.
+- What if the deployment target is not yet decided? Do not deploy the SPA to a static-only host; defer production deployment until the full-stack hosting and database-backed configuration approach are selected. The CI job (build + lint + test) is independently valuable.
 
 ## Requirements *(mandatory)*
 
@@ -68,9 +68,9 @@ When a PR is merged to `main`, a deployment workflow runs and the latest version
 - **FR-002**: The CI workflow MUST execute `npm ci` to install dependencies with a frozen lockfile.
 - **FR-003**: The CI workflow MUST run `npm run lint` and fail the job if lint errors are found.
 - **FR-004**: The CI workflow MUST run `npm run build` and fail the job if the build fails.
-- **FR-005**: When a test command exists, the CI workflow MUST run it and fail on test failures.
+- **FR-005**: The CI workflow MUST run the project's test suite and fail on test failures.
 - **FR-006**: The workflow MUST use the Node version pinned in the project's toolchain config (spec 004).
-- **FR-007**: A separate workflow or job MUST be responsible for deployment and MUST only trigger on pushes to `main`, not on PRs.
+- **FR-007**: A production deployment workflow MUST be added only after a full-stack hosting target is selected, and MUST only trigger on pushes to `main`, not on PRs.
 - **FR-008**: No credentials, tokens, or secrets MUST appear in workflow YAML files — all sensitive values MUST use GitHub Actions secrets.
 
 ## Success Criteria *(mandatory)*
@@ -81,11 +81,11 @@ When a PR is merged to `main`, a deployment workflow runs and the latest version
 - **SC-002**: A PR with a lint error cannot be merged until the error is fixed (merge is blocked by a required status check).
 - **SC-003**: A PR with a build failure cannot be merged until the error is fixed.
 - **SC-004**: The CI workflow YAML passes GitHub Actions syntax validation with zero warnings.
-- **SC-005**: Merging to `main` triggers a successful deployment within 5 minutes.
+- **SC-005**: Once a full-stack deployment target is configured, merging to `main` triggers a successful deployment within 5 minutes.
 
 ## Assumptions
 
 - The project is hosted on GitHub and GitHub Actions is available.
-- The deployment target is GitHub Pages (or a similarly simple static hosting service) — no containerization or server infrastructure is required.
-- A deployment target URL does not need to be finalized before the CI portion of the workflow can be implemented independently.
-- The test suite (spec 006) does not need to exist before CI is set up; the test step is conditional on a test script being present.
+- Production hosting must support the frontend, backend, and database-backed configuration storage; a static-only host is insufficient.
+- The production target and its infrastructure do not need to be finalized before the CI portion of the workflow can be implemented independently.
+- The test suite is a required quality gate and the repository must retain its test script.

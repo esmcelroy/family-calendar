@@ -26,18 +26,19 @@ A family member wants to bring in events from an external calendar (e.g., school
 
 ### User Story 2 - View a Merged, Exportable ICS Feed (Priority: P2)
 
-A family member wants a single ICS URL they can subscribe to from any calendar app (e.g., Apple Calendar, Google Calendar) that reflects all events from all subscribed ICS feeds — without any alarm/notification data.
+A family member wants a single merged ICS calendar reflecting all enabled external subscriptions without alarm/notification data. Local mode provides a downloadable file for import. A stable live subscription URL is deferred to the optional backend track (#129).
 
 **Why this priority**: This is the output half of the feature. It delivers the merged, notification-stripped ICS feed that allows the family calendar to act as an aggregator for other calendar clients.
 
-**Independent Test**: Add at least one ICS subscription containing one or more VALARM components. Open the exported feed URL. Confirm all events from the subscription appear and no VALARM components are present.
+**Independent Test**: Add at least one ICS subscription containing one or more VALARM components. Download the merged ICS file and import it into a calendar client. Confirm all enabled events appear and no VALARM components are present. Test live URL subscription separately when backend support is delivered.
 
 **Acceptance Scenarios**:
 
-1. **Given** the user has at least one ICS subscription saved, **When** they access the exported ICS feed URL, **Then** the feed contains all events from all subscribed calendars in valid ICS format.
+1. **Given** the user has at least one enabled ICS subscription saved, **When** they download the merged ICS file, **Then** it contains all events from enabled subscriptions in valid ICS format.
 2. **Given** one or more source calendars contain events with VALARM (alarm/notification) components, **When** those events are included in the exported feed, **Then** all VALARM components are stripped from the output.
-3. **Given** the user has no subscriptions saved, **When** they access the exported ICS feed URL, **Then** the feed is a valid but empty ICS calendar.
-4. **Given** the exported ICS feed URL, **When** a third-party calendar client subscribes to it, **Then** events are displayed correctly in that client.
+3. **Given** the user has no enabled subscriptions, **When** they download the merged ICS file, **Then** it is a valid but empty ICS calendar.
+4. **Given** the downloaded ICS file, **When** a third-party calendar client imports it, **Then** events are displayed correctly in that client.
+5. **Given** future backend live-feed support, **When** a third-party calendar client subscribes to the stable feed URL, **Then** it receives the merged calendar without needing an interactive app login. Access protection and refresh behavior must be resolved in backend planning before delivery.
 
 ---
 
@@ -71,9 +72,9 @@ A family member wants to assign a name and color to each ICS subscription so the
 - **FR-002**: The system MUST fetch and parse the ICS data from each subscription URL and display those events on the calendar grid.
 - **FR-003**: Subscriptions MUST be persisted across sessions so events are available on subsequent visits.
 - **FR-004**: Users MUST be able to view, edit, and remove saved ICS subscriptions.
-- **FR-005**: The system MUST expose a single merged ICS feed URL that aggregates events from all saved subscriptions.
+- **FR-005**: Local mode MUST provide a downloadable merged ICS file aggregating events from all enabled subscriptions. A stable live feed URL is deferred to the optional backend track.
 - **FR-006**: The merged ICS output feed MUST strip all VALARM components from every event before including it.
-- **FR-007**: The merged ICS output feed MUST be accessible via a stable, shareable URL without requiring authentication to read.
+- **FR-007**: Future backend mode MUST support a stable, shareable merged feed URL usable by calendar clients without an interactive app login. Backend planning MUST resolve access protection for private calendar data; local mode does not host a live feed.
 - **FR-008**: The merged ICS output feed MUST be valid RFC 5545-compliant ICS data.
 - **FR-009**: Subscription events MUST be visually distinguishable from family-created events on the calendar grid.
 - **FR-010**: When a subscribed ICS URL cannot be fetched, the system MUST surface an error indicator for that subscription without removing it.
@@ -89,16 +90,16 @@ A family member wants to assign a name and color to each ICS subscription so the
 ### Measurable Outcomes
 
 - **SC-001**: A user can add a new ICS subscription and see its events on the calendar grid within 5 seconds of saving.
-- **SC-002**: The exported merged ICS feed is accepted as a valid subscription by at least two major calendar clients (e.g., Apple Calendar, Google Calendar).
+- **SC-002**: The downloaded merged ICS file is accepted as a valid import by at least two major calendar clients (e.g., Apple Calendar, Google Calendar). Live subscription compatibility is a separate backend delivery criterion.
 - **SC-003**: No VALARM components appear in the exported merged ICS feed, regardless of whether source calendars include them.
 - **SC-004**: Users can add, view, and remove subscriptions entirely within the existing app UI without needing to leave the page.
 - **SC-005**: Subscription data survives a full page reload and re-fetch.
 
 ## Assumptions
 
-- The app runs in a browser environment; ICS fetching from external URLs must be handled in a way that avoids CORS issues (e.g., via a proxy or service worker). A simple proxy endpoint is assumed to be feasible.
-- The exported ICS feed URL is served from the same host as the application and does not require a separate backend deployment beyond what the app already uses.
+- The current app runs in a browser environment with zero-config localStorage persistence. External sources must permit cross-origin requests, or the user must explicitly configure a suitable proxy. A service worker cannot bypass CORS, and no public proxy is assumed safe for private calendar URLs.
+- Local mode exports files only. A stable live feed requires the optional backend and is deferred to #129.
 - Support for recurring events (RRULE, EXDATE, etc.) in the merged output is limited to pass-through — the system copies recurring event definitions without expanding them.
 - Mobile/responsive support for the subscription management UI follows the same responsive approach already used by the rest of the app.
-- ICS subscriptions are shared across the family (i.e., all users of the same app instance see the same subscriptions); per-member subscription ownership is out of scope for v1.
+- Local-mode subscriptions belong to the current browser storage and are not synchronized across devices. Future backend mode shares subscriptions within the single family deployment; per-member ownership is out of scope for v1.
 - Authentication-protected ICS feeds are out of scope for v1, except for credentials embedded directly in the URL.
