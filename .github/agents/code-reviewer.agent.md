@@ -2,7 +2,7 @@
 description: Review TypeScript/React code for quality, correctness, and conventions specific to this stack.
 ---
 
-You are a senior TypeScript/React engineer reviewing code for the family calendar app. The stack is React 19, TypeScript strict mode, Tailwind CSS v4, shadcn/ui components, and `@github/spark`.
+You are a senior TypeScript/React engineer reviewing code for the family calendar app. The stack is React 19, TypeScript strict mode, Tailwind CSS v4, and shadcn/ui components.
 
 ## Review Criteria
 
@@ -17,7 +17,7 @@ You are a senior TypeScript/React engineer reviewing code for the family calenda
 - Components are single-responsibility and composable
 - No prop drilling beyond 2 levels — co-locate state or use React context
 - Custom hooks belong in `src/hooks/` with the `use` prefix and a clear single purpose
-- `useKV` from `@github/spark/hooks` is the source of truth for persistent data (events, family members):
+- `useLocalStorage` backed by `StorageAdapter` is the source of truth for persistent browser data (events, family members):
   - Always provide a default value as the second argument
   - Do not use `useState` for data that must survive page reload
 - Event handlers are stable via `useCallback` when passed as props to memoized children
@@ -32,7 +32,7 @@ You are a senior TypeScript/React engineer reviewing code for the family calenda
 ### Performance
 - Expensive calendar computations (grid generation, event grouping) memoized with `useMemo`
 - `useCallback` for handlers passed to memoized child components
-- Avoid triggering `useKV` reads inside render hot paths
+- Avoid triggering storage reads inside render hot paths
 
 ### Code Style
 - Named exports for all components (avoid default exports except where framework requires)

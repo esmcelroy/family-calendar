@@ -5,17 +5,21 @@
 
 ## Summary
 
-Allow the family calendar to subscribe to external ICS calendar URLs and display their events on the grid. Separately, produce a merged ICS feed (as a downloadable export) that aggregates all subscription events with VALARM components stripped — enabling users to share or import the merged calendar into third-party clients.
+Allow the family calendar to subscribe to external ICS calendar URLs and display their events on the grid. In local mode, produce a merged downloadable ICS export with VALARM components stripped. A stable live subscription feed is deferred to the optional backend track (#129).
 
 ## Technical Context
 
 **Language/Version**: TypeScript (strict, existing)  
-**Primary Dependencies**: React 18, shadcn/ui, Tailwind CSS, @phosphor-icons/react, `useKV` (Spark KV), `ical.js` (ICS parsing — to be added)  
-**Storage**: Spark `useKV` (persisted KV store) for subscription metadata; parsed events held in React state  
-**Testing**: Manual / browser  
-**Target Platform**: Browser (GitHub Spark app)  
+**Primary Dependencies**: React, shadcn/ui, Tailwind CSS, @phosphor-icons/react, `ical.js` (ICS parsing)
+
+**Storage**: `useLocalStorage` backed by the centralized `StorageAdapter` for subscription metadata; parsed events held in transient React state
+
+**Testing**: Vitest and React Testing Library, plus calendar-client import checks
+
+**Target Platform**: Browser (standalone Vite app)
 **Performance Goals**: Subscription events visible within 3s of page load; merged ICS export generated client-side in < 500ms for typical calendar sizes  
-**Constraints**: Browser-only runtime; no custom backend. ICS fetching is subject to CORS — app uses a configurable CORS proxy URL (stored in KV, defaulting to a known public proxy or a Spark-hosted proxy path). Export is a client-side downloaded `.ics` file rather than a live-hosted subscription URL (browser cannot serve persistent HTTP endpoints).  
+**Constraints**: Current delivery is browser-only. ICS fetching is subject to CORS; any proxy must be explicitly configured, with no default public proxy and no automatic forwarding of credentials. Export is a client-side downloaded `.ics` file; a persistent live feed requires the optional backend.
+
 **Scale/Scope**: Typical household: 2–10 ICS subscriptions, each with up to ~500 events
 
 ## Constitution Check
@@ -23,7 +27,7 @@ Allow the family calendar to subscribe to external ICS calendar URLs and display
 - [x] **Component-Driven Architecture** — New UI lives in `src/components/IcsSubscriptionsSheet.tsx` (shadcn/ui Sheet); utility logic in `src/lib/ics.ts`
 - [x] **TypeScript Strictness** — New types added to `src/lib/types.ts`; no `any`
 - [x] **Accessibility First** — Sheet uses Radix Dialog base; filter chips follow existing pattern; keyboard-navigable
-- [x] **Local-First Data Persistence** — Subscriptions persisted via `useKV`; fetched event data regenerated on load
+- [x] **Local-First Data Persistence** — Subscriptions persisted via `useLocalStorage`/`StorageAdapter`; fetched event data regenerated on load
 - [x] **Simplicity & YAGNI** — `ical.js` is the only new dependency; no backend
 
 **GATE RESULT**: PASS — proceed to implementation.
@@ -36,21 +40,21 @@ Allow the family calendar to subscribe to external ICS calendar URLs and display
 
 ### CORS Handling Strategy
 
-External ICS URLs cannot be fetched directly from a browser due to CORS. Chosen approach:
-1. Try direct `fetch` (works for servers that set `Access-Control-Allow-Origin: *`)  
-2. On CORS failure, prefix the URL with a configurable proxy base (default: `https://corsproxy.io/?`), retry once  
-3. Store the proxy base in KV so power users can override it
+External ICS URLs can be fetched directly when the source permits browser cross-origin access. Chosen approach:
+1. Try direct `fetch`.
+2. On a network/CORS failure, retry once only if a proxy was explicitly configured and the source is safe to forward. Browser fetch cannot reliably distinguish CORS denial from other network failures.
+3. Persist an explicitly configured proxy base through localStorage. Treat private feed URLs as sensitive; never automatically forward URL-embedded credentials to a proxy.
 
-This keeps the feature working for the common case (e.g., Google Calendar public ICS URLs), is transparent about failures, and requires zero backend changes.
+For supported URL-embedded basic authentication, extract credentials for the direct request rather than passing a credential-bearing URL to browser `fetch`. Surface fetch/authentication failures clearly. A service worker does not bypass source-server CORS policy.
 
 ### ICS Export Strategy
 
-A Spark browser app cannot expose a persistent HTTP endpoint for calendar clients to subscribe to. Instead:
+A browser-only app cannot expose a persistent HTTP endpoint for calendar clients to subscribe to. In local mode:
 - Generate the merged ICS as a string in the browser
 - Offer a **Download .ics** button (downloads `family-calendar.ics`)
 - Show the raw ICS text in a copyable code block for manual import
 
-This is honest about what a browser app can deliver. A future Spark server-route feature (if available) could upgrade this to a true subscription URL without spec changes.
+The user confirmed that a stable live merged feed belongs to the optional backend track (#129). Backend planning must define feed access and refresh behavior; it is not a deliverable of the browser-only phases below.
 
 ### VALARM Stripping
 
@@ -103,7 +107,7 @@ Build the sheet for adding, listing, and removing ICS subscriptions.
 
 **Deliverables**:
 - `src/components/IcsSubscriptionsSheet.tsx` — shadcn Sheet with form (URL, display name, color picker), subscription list, remove button, error badge
-- `App.tsx` — wire `useKV<IcsSubscription[]>('ics-subscriptions', [])`, pass to sheet, fetch events on mount and subscription save
+- `App.tsx` — wire `useLocalStorage<IcsSubscription[]>('ics-subscriptions', [])`, pass to sheet, fetch events on mount and subscription save
 
 **Checkpoint**: User can add a public ICS URL and see events on the calendar grid.
 

@@ -1,5 +1,5 @@
 {
-    "name": "spark-template",
+    "name": "family-calendar",
     "private": true,
     "version": "0.0.0",
     "engines": {
@@ -17,7 +17,6 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@github/spark": ">=0.43.1 <1",
         "@heroicons/react": "^2.2.0",
         "@hookform/resolvers": "^5.2.2",
         "@octokit/core": "^7.0.6",

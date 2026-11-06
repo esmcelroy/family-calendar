@@ -16,7 +16,7 @@
 - `useLocalStorage<T>` setter **MUST** be `React.Dispatch<React.SetStateAction<T>>` — `App.tsx` uses functional updaters (`setEvents(prev => ...)`) at **5 call-sites**. A narrower `(v: T) => void` setter breaks them.
 - `StorageAdapter` uses **method-level** generics (`get<T>` / `set<T>`) — one shared instance serves both `CalendarEvent[]` and `FamilyMember[]`.
 - Cross-tab sync via `window` `storage` event is part of the hook contract (not optional).
-- `@github/spark` package **stays in `package.json`** — only the `useKV` import in `src/App.tsx` is removed.
+- The original implementation removed the `useKV` import first; follow-up portability cleanup also removed the Spark runtime, Vite plugins, package dependency, and Spark-specific metadata.
 - Key names change: `'family-events'` → `STORAGE_KEYS.events` (`'family-calendar:events'`), `'family-members'` → `STORAGE_KEYS.members` (`'family-calendar:members'`). No data migration required (FR-010).
 - **Test tasks are stubs only** — all depend on Vitest setup from spec 006. Create file structure and test bodies now; they become runnable after spec 006 completes.
 
@@ -236,7 +236,7 @@ Task T022: npm run build
 ## Notes
 
 - **Test stubs (T004, T005, T012, T013, T016)**: Create the file, `describe` blocks, and `it`/`test` bodies now. Mark them `.todo` or `it.skip` so they compile without running. Activate after spec 006 (Vitest setup) is complete.
-- **`@github/spark` stays in `package.json`**: The constraint is `grep -r '@github/spark' src/` → empty. The package may still be referenced outside `src/` (Vite config, etc.); full removal is deferred cleanup.
-- **No data migration**: Spark KV keys (`family-events`, `family-members`) are inaccessible from `localStorage`; the new `family-calendar:` namespace starts fresh. This is acceptable per FR-010.
+- **Spark removal**: The runtime import, Vite plugins, package dependency, and Spark-specific configuration have been removed. Historical migration examples below refer to the former implementation.
+- **No data migration**: Spark KV keys (`family-events`, `family-members`) were inaccessible from `localStorage`; the new `family-calendar:` namespace started fresh. This is acceptable per FR-010.
 - **Functional updater compatibility is the critical correctness constraint**: The `useLocalStorage` setter must be the raw setter from `useState` — not a wrapper. This ensures `setEvents(prev => ...)` is handled by React's own reconciler with the correct current state, not by re-reading from `localStorage` (which would risk stale data).
 - **Same file, sequential tasks**: T002 and T003 are both in `src/lib/storage.ts`; T006 and T007 are also in that file. Write sequentially — do not attempt to parallelize edits within the same file.
