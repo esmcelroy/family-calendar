@@ -87,7 +87,7 @@
 }
 
 @layer base {
-  #root {
+  :root {
     --tomato-contrast: #fff;
     --red-contrast: #fff;
     --ruby-contrast: #fff;
