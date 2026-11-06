@@ -5,6 +5,9 @@ import { useLocalStorage } from '@/hooks/use-local-storage'
 import { expandRecurringEvents, formatDate, formatTime, sortEventsByTime } from '@/lib/calendar'
 import { Clock, CalendarBlank } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
+import { configuredRuntimeMode, type RuntimeMode } from '@/lib/runtime-mode'
+import { ServerKioskView } from '@/components/ServerKioskView'
+import { ServerApplication } from '@/components/auth/ServerApplication'
 
 const DEFAULT_KIOSK_CONFIG: KioskConfig = {
   memberFilter: [],
@@ -122,7 +125,7 @@ function UpcomingDay({ date, events, members }: UpcomingDayProps) {
   )
 }
 
-export function KioskView() {
+function LocalKioskView() {
   const [kioskConfig] = useLocalStorage<KioskConfig>(
     STORAGE_KEYS.kioskConfig,
     DEFAULT_KIOSK_CONFIG,
@@ -304,4 +307,15 @@ export function KioskView() {
       </div>
     </div>
   )
+}
+
+export function KioskView({ mode = configuredRuntimeMode }: { mode?: RuntimeMode } = {}) {
+  if (mode === 'server') {
+    return (
+      <ServerApplication showAdminPanels={false}>
+        <ServerKioskView />
+      </ServerApplication>
+    )
+  }
+  return <LocalKioskView />
 }

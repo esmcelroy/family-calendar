@@ -1,0 +1,961 @@
+openapi: 3.1.0
+info:
+  title: Family Calendar Self-Hosted API
+  version: 0.1.0
+  description: |
+    Runtime-neutral contract draft for the optional one-family backend deployment.
+    Local browser-only mode does not call this API. Auth transport, framework,
+    database driver, and exact error messages remain implementation decisions.
+servers:
+  - url: /
+    description: Same-origin application/API service in self-hosted mode
+tags:
+  - name: Runtime
+  - name: Authentication
+  - name: Administration
+  - name: Calendar
+  - name: Preferences
+  - name: Settings
+  - name: Feed
+paths:
+  /api/mode:
+    get:
+      tags: [Runtime]
+      operationId: getRuntimeMode
+      summary: Identify the authoritative application mode
+      description: |
+        Server deployment returns mode=server. A client already configured for
+        server mode MUST surface endpoint/configuration failure, never switch to
+        localStorage. Existing Vite-only workflow remains local and does not
+        require this endpoint.
+      responses:
+        "200":
+          description: Server mode runtime configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mode]
+                properties:
+                  mode:
+                    const: server
+                  bootstrapRequired:
+                    type: boolean
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/auth/bootstrap:
+    post:
+      tags: [Authentication, Administration]
+      operationId: bootstrapAdministrator
+      summary: Create the first administrator on an empty deployment
+      description: |
+        This operation is available only while no users exist. It must be
+        atomic under concurrent requests. After success, bootstrap is closed.
+        No public user registration endpoint is provided.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BootstrapRequest"
+      responses:
+        "201":
+          description: Initial administrator created and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedUser"
+        "409":
+          description: Bootstrap is already complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate a family account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Credentials accepted; session established using the selected secure transport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedUser"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "429":
+          description: Authentication is rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/session:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentSession
+      summary: Get the current authenticated account
+      x-authentication: required
+      responses:
+        "200":
+          description: Current account and role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedUser"
+        "401":
+          $ref: "#/components/responses/ApiError"
+  /api/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: End the current authenticated session
+      x-authentication: required
+      responses:
+        "204":
+          description: Session ended
+        "401":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/users:
+    get:
+      tags: [Administration]
+      operationId: listUsers
+      summary: List family accounts
+      x-authentication: admin
+      responses:
+        "200":
+          description: Account list without password hashes or session credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+    post:
+      tags: [Administration]
+      operationId: createUser
+      summary: Create a family account
+      description: Only administrators create accounts; public signup and password recovery are out of scope.
+      x-authentication: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "409":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/events:
+    get:
+      tags: [Calendar]
+      operationId: listEvents
+      summary: List shared family events
+      x-authentication: required
+      responses:
+        "200":
+          description: Shared events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CalendarEvent"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+    post:
+      tags: [Calendar]
+      operationId: createEvent
+      summary: Create a shared family event
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarEventInput"
+      responses:
+        "201":
+          description: Persisted event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarEvent"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    put:
+      tags: [Calendar]
+      operationId: updateEvent
+      summary: Update a shared family event
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarEventInput"
+      responses:
+        "200":
+          description: Persisted event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarEvent"
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+    delete:
+      tags: [Calendar]
+      operationId: deleteEvent
+      summary: Delete a shared family event
+      x-authentication: required
+      responses:
+        "204":
+          description: Event deleted
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/members:
+    get:
+      tags: [Calendar]
+      operationId: listFamilyMembers
+      summary: List shared family members
+      x-authentication: required
+      responses:
+        "200":
+          description: Shared family members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FamilyMember"
+        "401":
+          $ref: "#/components/responses/ApiError"
+    post:
+      tags: [Calendar]
+      operationId: createFamilyMember
+      summary: Add a shared family member
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FamilyMemberInput"
+      responses:
+        "201":
+          description: Persisted family member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FamilyMember"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/members/{memberId}:
+    parameters:
+      - name: memberId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags: [Calendar]
+      operationId: updateFamilyMember
+      summary: Update a shared family member
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FamilyMemberInput"
+      responses:
+        "200":
+          description: Persisted family member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FamilyMember"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+    delete:
+      tags: [Calendar]
+      operationId: deleteFamilyMember
+      summary: Delete a shared family member and apply the chosen event-reference policy
+      x-authentication: required
+      responses:
+        "204":
+          description: Member deleted
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/me/preferences:
+    get:
+      tags: [Preferences]
+      operationId: getPreferences
+      summary: Read the current user’s preferences
+      x-authentication: required
+      responses:
+        "200":
+          description: Preferences belonging only to the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreference"
+        "401":
+          $ref: "#/components/responses/ApiError"
+    put:
+      tags: [Preferences]
+      operationId: updatePreferences
+      summary: Update the current user’s preferences
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPreferenceInput"
+      responses:
+        "200":
+          description: Persisted per-user preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreference"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/subscriptions:
+    get:
+      tags: [Calendar]
+      operationId: listSubscriptions
+      summary: List shared external ICS subscriptions
+      x-authentication: required
+      responses:
+        "200":
+          description: Subscription metadata; secrets and credentials are omitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subscriptions]
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CalendarSubscription"
+        "401":
+          $ref: "#/components/responses/ApiError"
+    post:
+      tags: [Calendar]
+      operationId: createSubscription
+      summary: Add a shared external ICS subscription
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarSubscriptionInput"
+      responses:
+        "201":
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarSubscription"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/subscriptions/{subscriptionId}:
+    parameters:
+      - name: subscriptionId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags: [Calendar]
+      operationId: updateSubscription
+      summary: Update a shared external ICS subscription
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarSubscriptionInput"
+      responses:
+        "200":
+          description: Persisted subscription metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarSubscription"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+    delete:
+      tags: [Calendar]
+      operationId: deleteSubscription
+      summary: Remove a shared external ICS subscription
+      x-authentication: required
+      responses:
+        "204":
+          description: Subscription removed
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/settings:
+    get:
+      tags: [Settings, Administration]
+      operationId: getFamilySettings
+      summary: Read backend-owned organizer and SMTP settings
+      description: SMTP password and protected secret material MUST never appear in the response.
+      x-authentication: admin
+      responses:
+        "200":
+          description: Sanitized settings and whether SMTP is configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FamilySettings"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+    put:
+      tags: [Settings, Administration]
+      operationId: updateFamilySettings
+      summary: Save backend-owned organizer and SMTP settings
+      x-authentication: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FamilySettingsInput"
+      responses:
+        "200":
+          description: Sanitized persisted settings; no SMTP secret is returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FamilySettings"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/settings/smtp/test:
+    post:
+      tags: [Settings, Administration]
+      operationId: testSavedSmtpSettings
+      summary: Test the persisted SMTP configuration
+      description: SMTP credentials are read from backend-owned settings; none are supplied by the browser.
+      x-authentication: admin
+      responses:
+        "200":
+          description: SMTP connection test succeeded
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+        "422":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/calendar/events/{eventId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    post:
+      tags: [Calendar, Settings]
+      operationId: sendEventInvitations
+      summary: Send event invitations using backend-owned settings
+      description: |
+        The browser supplies event action metadata only. SMTP credentials are
+        never accepted in the request; the backend uses its saved family
+        settings. Local mailto behavior remains available in local mode.
+      x-authentication: required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method, sequence]
+              properties:
+                method:
+                  type: string
+                  enum: [REQUEST, CANCEL]
+                sequence:
+                  type: integer
+                  minimum: 0
+                recurrenceId:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: Per-recipient delivery results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [status, recipientEmail]
+                      properties:
+                        status:
+                          type: string
+                          enum: [sent, failed, skipped]
+                        recipientEmail:
+                          type: string
+                          format: email
+                        error:
+                          type: string
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "404":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/admin/feed:
+    get:
+      tags: [Feed, Administration]
+      operationId: getFeedStatus
+      summary: Read feed status and current URL metadata
+      description: The URL is a bearer capability and must be handled as a secret.
+      x-authentication: admin
+      responses:
+        "200":
+          description: Feed status; secret exposure policy remains to be finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedStatus"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+    post:
+      tags: [Feed, Administration]
+      operationId: rotateFeedCredential
+      summary: Rotate the public feed capability
+      description: Revokes the prior feed URL and issues a new bearer capability.
+      x-authentication: admin
+      responses:
+        "200":
+          description: New feed URL; exact one-time display policy remains to be finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedStatus"
+        "401":
+          $ref: "#/components/responses/ApiError"
+        "403":
+          $ref: "#/components/responses/ApiError"
+        "5XX":
+          $ref: "#/components/responses/ApiError"
+
+  /api/feeds/{feedToken}.ics:
+    get:
+      tags: [Feed]
+      operationId: getMergedIcsFeed
+      summary: Retrieve the current merged family calendar feed
+      description: |
+        Public to calendar clients by bearer capability. Do not log the token.
+        Output is generated from current shared calendar data and enabled
+        subscriptions and contains no VALARM components. Cache policy and exact
+        composition/freshness are implementation decisions.
+      security: []
+      parameters:
+        - name: feedToken
+          in: path
+          required: true
+          description: Revocable bearer capability; redact from logs and analytics.
+          schema:
+            type: string
+            minLength: 32
+      responses:
+        "200":
+          description: Current merged iCalendar data
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Must not outlive feed freshness/rotation policy.
+          content:
+            text/calendar:
+              schema:
+                type: string
+        "404":
+          description: Unknown, revoked, or invalid capability
+
+components:
+  parameters:
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    ApiError:
+      description: Request failed; backend writes are not queued or stored locally
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+  schemas:
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+          description: Safe, user-visible summary; must not disclose secrets or stack traces.
+        requestId:
+          type: string
+    BootstrapRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+    AuthenticatedUser:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+    CreateUserRequest:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 8
+          writeOnly: true
+        role:
+          type: string
+          enum: [admin, member]
+    User:
+      type: object
+      required: [id, username, role, createdAt]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+        createdAt:
+          type: string
+          format: date-time
+    CalendarEventInput:
+      type: object
+      required: [title, date, memberIds]
+      properties:
+        title:
+          type: string
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        endTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        description:
+          type: string
+        memberIds:
+          type: array
+          items:
+            type: string
+        seriesId:
+          type: string
+        recurrence:
+          type: object
+          additionalProperties: true
+        seriesExceptions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        sequence:
+          type: integer
+          minimum: 0
+    CalendarEvent:
+      allOf:
+        - $ref: "#/components/schemas/CalendarEventInput"
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+    FamilyMember:
+      type: object
+      required: [id, name, color]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+        email:
+          type: string
+          format: email
+        preferredPlatform:
+          type: string
+          enum: [google, apple, outlook, other]
+    FamilyMemberInput:
+      type: object
+      required: [name, color]
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+        email:
+          type: string
+          format: email
+        preferredPlatform:
+          type: string
+          enum: [google, apple, outlook, other]
+    UserPreferenceInput:
+      type: object
+      properties:
+        activeView:
+          type: string
+        activeFilters:
+          type: array
+          items:
+            type: string
+    UserPreference:
+      allOf:
+        - $ref: "#/components/schemas/UserPreferenceInput"
+        - type: object
+          required: [updatedAt]
+          properties:
+            updatedAt:
+              type: string
+              format: date-time
+    CalendarSubscriptionInput:
+      type: object
+      required: [displayName, sourceUrl]
+      properties:
+        displayName:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+        color:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+    CalendarSubscription:
+      allOf:
+        - $ref: "#/components/schemas/CalendarSubscriptionInput"
+        - type: object
+          required: [id, lastFetchedAt]
+          properties:
+            id:
+              type: string
+            lastFetchedAt:
+              type: [string, "null"]
+              format: date-time
+            lastFetchError:
+              type: [string, "null"]
+    FamilySettingsInput:
+      type: object
+      properties:
+        organizerName:
+          type: [string, "null"]
+        organizerEmail:
+          type: [string, "null"]
+        smtp:
+          type: object
+          properties:
+            host:
+              type: [string, "null"]
+            port:
+              type: [integer, "null"]
+            secure:
+              type: boolean
+            username:
+              type: [string, "null"]
+            password:
+              type: [string, "null"]
+              writeOnly: true
+            fromName:
+              type: [string, "null"]
+            fromAddress:
+              type: [string, "null"]
+              format: email
+    FamilySettings:
+      type: object
+      required: [smtpConfigured]
+      properties:
+        organizerName:
+          type: [string, "null"]
+        organizerEmail:
+          type: [string, "null"]
+        smtpConfigured:
+          type: boolean
+        smtp:
+          type: object
+          properties:
+            host:
+              type: [string, "null"]
+            port:
+              type: [integer, "null"]
+            secure:
+              type: boolean
+            username:
+              type: [string, "null"]
+            fromName:
+              type: [string, "null"]
+            fromAddress:
+              type: [string, "null"]
+              format: email
+    FeedStatus:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        feedUrl:
+          type: string
+          format: uri
+          description: Bearer-capability URL; sensitive and must not be logged.

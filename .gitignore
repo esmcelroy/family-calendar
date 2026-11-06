@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build
+coverage
 *-dist
 *.local
 
@@ -25,11 +27,16 @@ dist-ssr
 *.sw?
 
 .env
+**/.env*
+!**/.env.example
 **/agent-eval-report*
 packages
 pids
 .file-manifest
 .devcontainer/
+.DS_Store
+Thumbs.db
+*.tmp
 
 .spark-workbench-id
 

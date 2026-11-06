@@ -4,6 +4,7 @@ import { KioskView } from './KioskView'
 import type { CalendarEvent, FamilyMember, KioskConfig } from '@/lib/types'
 import { STORAGE_KEYS } from '@/lib/storage'
 import { formatDate } from '@/lib/calendar'
+import { ServerApiError, serverApi } from '@/lib/server-api'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ describe('KioskView', () => {
   afterEach(() => {
     expect(consoleErrorSpy, 'No React errors should be thrown').not.toHaveBeenCalled()
     consoleErrorSpy.mockRestore()
+    vi.unstubAllGlobals()
     vi.useRealTimers()
   })
 
@@ -169,6 +171,77 @@ describe('KioskView', () => {
     render(<KioskView />)
 
     expect(screen.getByText(/2:30 PM/i)).toBeInTheDocument()
+  })
+
+  it('reads authenticated server-mode kiosk data without accessing localStorage', async () => {
+    let events: CalendarEvent[] = [
+      { id: 'server-e1', title: 'Server-only event', date: todayStr(), memberIds: ['server-m1'] },
+      { id: 'server-e2', title: 'Upcoming event', date: inNDays(5), memberIds: [] },
+      { id: 'server-e3', title: 'Beyond seven days', date: inNDays(8), memberIds: [] },
+    ]
+    const members: FamilyMember[] = [
+      { id: 'server-m1', name: 'Server member', color: 'blue' },
+    ]
+    const request = vi.spyOn(serverApi, 'request').mockImplementation(async (path) => {
+      if (path === '/api/auth/session') {
+        return { user: { id: 'server-u1', username: 'admin', role: 'member', createdAt: '2026-11-06' } } as never
+      }
+      if (path === '/api/calendar/events') return { events } as never
+      if (path === '/api/calendar/members') return { members } as never
+      if (path === '/api/calendar/subscriptions') return { subscriptions: [] } as never
+      return { activeFilters: [] } as never
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ mode: 'server', bootstrapRequired: false }),
+    }))
+    const getItem = vi.spyOn(window.localStorage, 'getItem')
+    const setItem = vi.spyOn(window.localStorage, 'setItem')
+
+    render(<KioskView mode="server" />)
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Server-only event')).toBeInTheDocument()
+    expect(screen.getByText('Upcoming event')).toBeInTheDocument()
+    expect(screen.queryByText('Beyond seven days')).not.toBeInTheDocument()
+    expect(request).toHaveBeenCalledWith('/api/auth/session')
+    expect(request).toHaveBeenCalledWith('/api/calendar/events')
+    expect(getItem).not.toHaveBeenCalled()
+    expect(setItem).not.toHaveBeenCalled()
+
+    events = [...events, { id: 'server-e4', title: 'Refreshed event', date: todayStr(), memberIds: [] }]
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300_000)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Refreshed event')).toBeInTheDocument()
+    request.mockRestore()
+  })
+
+  it('requires authentication before loading the server kiosk calendar', async () => {
+    const request = vi.spyOn(serverApi, 'request').mockRejectedValue(
+      new ServerApiError(401, 'UNAUTHENTICATED', 'Sign in to continue.'),
+    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ mode: 'server', bootstrapRequired: false }),
+    }))
+
+    render(<KioskView mode="server" />)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(request).toHaveBeenCalledWith('/api/auth/session')
+    expect(request).not.toHaveBeenCalledWith('/api/calendar/events')
   })
 
   it('refreshes data when Page Visibility API fires visible event', () => {
