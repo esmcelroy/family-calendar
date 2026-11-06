@@ -16,14 +16,18 @@ export async function fetchAndParseIcs(url: string, corsProxy?: string): Promise
   try {
     icsText = await fetchCalendarText(request.url, request.headers)
   } catch (directError) {
-    if (request.hasCredentials) {
+    if (request.hasCredentials && directError instanceof TypeError) {
       throw new Error(
         `Unable to fetch ICS calendar from ${redactUrlCredentials(url)} with URL-embedded credentials. ` +
         'The source must allow the Authorization header through CORS; credentials are not sent to a proxy.',
       )
     }
 
-    if (!corsProxy || !(directError instanceof TypeError)) {
+    if (request.hasCredentials || !(directError instanceof TypeError)) {
+      throw directError
+    }
+
+    if (!corsProxy) {
       throw directError
     }
 
@@ -56,7 +60,11 @@ export async function fetchAndParseIcs(url: string, corsProxy?: string): Promise
     }
 
     const event = new ICAL.Event(component)
-    const uid = event.uid || `event-${index + 1}`
+    const uid = event.uid
+    if (!uid) {
+      throw new Error(`Event ${index + 1} in ${redactUrlCredentials(url)} is missing a UID property.`)
+    }
+
     const recurrenceId = event.recurrenceId?.toString()
     const startDate = event.startDate
     const endDate = event.endDate
@@ -128,29 +136,98 @@ export function exportToIcsString(events: readonly SubscribedEvent[]): string {
   calendar.addPropertyWithValue('calscale', 'GREGORIAN')
   calendar.addPropertyWithValue('method', 'PUBLISH')
 
-  const timeZones = new Map<string, string>()
+  const timeZonesBySource = new Map<string, Map<string, string>>()
+  const timeZonesByOutputId = new Map<string, string>()
+  const timeZoneComponents = new Map<string, ICAL.Component>()
+
   for (const event of events) {
+    const sourceId = event.sourceSubscriptionId ?? event.icalTimeZones.join('\n')
+    let sourceTimeZones = timeZonesBySource.get(sourceId)
+    if (!sourceTimeZones) {
+      sourceTimeZones = new Map()
+      timeZonesBySource.set(sourceId, sourceTimeZones)
+    }
+
     for (const timeZoneText of event.icalTimeZones) {
       const timeZone = ICAL.Component.fromString(timeZoneText)
       const id = timeZone.getFirstPropertyValue('tzid')
-      const key = typeof id === 'string' ? id : timeZoneText
-      if (!timeZones.has(key)) {
-        timeZones.set(key, timeZoneText)
+      if (typeof id !== 'string' || !id) {
+        throw new Error('A VTIMEZONE component is missing its TZID property.')
       }
+
+      const normalizedText = timeZone.toString()
+      const existingSourceId = sourceTimeZones.get(id)
+      if (existingSourceId) {
+        const existingText = timeZonesByOutputId.get(existingSourceId)
+        if (existingText !== normalizedText) {
+          throw new Error(`Source calendar contains conflicting VTIMEZONE definitions for "${id}".`)
+        }
+        continue
+      }
+
+      const outputId = getUniqueTimeZoneId(id, sourceId, normalizedText, timeZonesByOutputId)
+      sourceTimeZones.set(id, outputId)
+      timeZone.updatePropertyWithValue('tzid', outputId)
+      const renamedText = timeZone.toString()
+      timeZonesByOutputId.set(outputId, renamedText)
+      timeZoneComponents.set(outputId, timeZone)
     }
   }
 
-  for (const timeZoneText of timeZones.values()) {
-    calendar.addSubcomponent(ICAL.Component.fromString(timeZoneText))
+  for (const timeZone of timeZoneComponents.values()) {
+    calendar.addSubcomponent(timeZone)
   }
 
   for (const event of events) {
     const component = ICAL.Component.fromString(event.icalComponent)
     component.removeAllSubcomponents('valarm')
+    const sourceId = event.sourceSubscriptionId ?? event.icalTimeZones.join('\n')
+    const sourceTimeZones = timeZonesBySource.get(sourceId)
+    rewriteTimeZoneReferences(component, sourceTimeZones)
     calendar.addSubcomponent(component)
   }
 
   return calendar.toString()
+}
+
+function getUniqueTimeZoneId(
+  originalId: string,
+  sourceId: string,
+  definition: string,
+  existingDefinitions: ReadonlyMap<string, string>,
+): string {
+  const existingDefinition = existingDefinitions.get(originalId)
+  if (existingDefinition === undefined || existingDefinition === definition) {
+    return originalId
+  }
+
+  const safeSourceId = sourceId.replace(/[^A-Za-z0-9_-]/g, '_') || 'source'
+  let suffix = 1
+  let candidate = `${originalId}-family-calendar-${safeSourceId}`
+  while (existingDefinitions.has(candidate) && existingDefinitions.get(candidate) !== definition) {
+    suffix += 1
+    candidate = `${originalId}-family-calendar-${safeSourceId}-${suffix}`
+  }
+  return candidate
+}
+
+function rewriteTimeZoneReferences(
+  component: ICAL.Component,
+  sourceTimeZones: ReadonlyMap<string, string> | undefined,
+): void {
+  if (sourceTimeZones) {
+    for (const property of component.getAllProperties()) {
+      const originalId = property.getFirstParameter('tzid')
+      const outputId = sourceTimeZones.get(originalId)
+      if (outputId && outputId !== originalId) {
+        property.setParameter('tzid', outputId)
+      }
+    }
+  }
+
+  for (const subcomponent of component.getAllSubcomponents()) {
+    rewriteTimeZoneReferences(subcomponent, sourceTimeZones)
+  }
 }
 
 async function fetchCalendarText(url: string, headers?: HeadersInit): Promise<string> {

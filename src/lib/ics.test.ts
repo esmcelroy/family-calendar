@@ -163,6 +163,17 @@ describe('fetchAndParseIcs', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
+  it('preserves HTTP status errors for credentialed URLs without proxy retries', async () => {
+    const url = new URL(subscription.url)
+    url.username = 'fixture-user'
+    url.password = 'fixture-password'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchAndParseIcs(url.toString(), 'https://proxy.example/?')).rejects.toThrow('HTTP 401')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
   it('rejects empty URLs and network failures without a proxy', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('Offline'))
     vi.stubGlobal('fetch', fetchMock)
@@ -233,6 +244,20 @@ describe('fetchAndParseIcs', () => {
 
     await expect(fetchAndParseIcs(subscription.url)).rejects.toThrow('not a valid VCALENDAR')
     await expect(fetchAndParseIcs(subscription.url)).rejects.toThrow('missing a DTSTART')
+  })
+
+  it('rejects VEVENTs without a UID', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'DTSTART:20261003T140000Z',
+      'SUMMARY:Missing UID',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'))))
+
+    await expect(fetchAndParseIcs(subscription.url)).rejects.toThrow('missing a UID')
   })
 
   it('surfaces invalid ICS instead of returning a success-shaped empty result', async () => {
@@ -353,5 +378,59 @@ describe('exportToIcsString', () => {
 
     expect(exported).toContain('BEGIN:VTIMEZONE')
     expect(exported).toContain('TZID:Example/Zone')
+  })
+
+  it('renames conflicting source TZIDs and rewrites event and recurrence references', async () => {
+    const makeCalendar = (uid: string, offset: string, eventProps: string[]) => [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VTIMEZONE',
+      'TZID:Custom/Zone',
+      'BEGIN:STANDARD',
+      'DTSTART:19700101T000000',
+      `TZOFFSETFROM:${offset}`,
+      `TZOFFSETTO:${offset}`,
+      'END:STANDARD',
+      'END:VTIMEZONE',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      ...eventProps,
+      'SUMMARY:Zone-specific event',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n')
+    const schoolCalendar = makeCalendar('school-zone@example.com', '-0500', [
+      'DTSTART;TZID=Custom/Zone:20261003T140000',
+      'DTEND;TZID=Custom/Zone:20261003T150000',
+    ])
+    const sportsCalendar = makeCalendar('sports-zone@example.com', '+0900', [
+      'DTSTART;TZID=Custom/Zone:20261010T140000',
+      'DTEND;TZID=Custom/Zone:20261010T150000',
+      'RECURRENCE-ID;TZID=Custom/Zone:20261003T140000',
+    ])
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(schoolCalendar))
+      .mockResolvedValueOnce(new Response(sportsCalendar))
+    vi.stubGlobal('fetch', fetchMock)
+    const [schoolEvents, sportsEvents] = await Promise.all([
+      fetchAndParseIcs('https://example.com/school.ics'),
+      fetchAndParseIcs('https://example.com/sports.ics'),
+    ])
+    const merged = mergeAndStripAlarms(
+      [subscription, { ...subscription, id: 'sports', name: 'Sports' }],
+      new Map([
+        ['school', schoolEvents],
+        ['sports', sportsEvents],
+      ]),
+    )
+    const exported = exportToIcsString(merged)
+
+    expect(exported).toContain('TZID:Custom/Zone\r\n')
+    expect(exported).toContain('TZID:Custom/Zone-family-calendar-sports\r\n')
+    expect(exported).toContain('DTSTART;TZID=Custom/Zone:20261003T140000')
+    expect(exported).toContain('DTSTART;TZID=Custom/Zone-family-calendar-sports:20261010T140000')
+    expect(exported).toContain('RECURRENCE-ID;TZID=Custom/Zone-family-calendar-sports:20261003T140000')
+    expect(exported).toContain('TZOFFSETTO:-0500')
+    expect(exported).toContain('TZOFFSETTO:+0900')
   })
 })
