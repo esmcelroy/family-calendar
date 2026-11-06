@@ -63,13 +63,12 @@ class LocalStorageAdapter implements StorageAdapter {
   get<T>(key: string, defaultValue: T): T {
     if (typeof window === 'undefined') return defaultValue
 
-    const raw = window.localStorage.getItem(key)
-    if (raw === null) return defaultValue
-
     try {
+      const raw = window.localStorage.getItem(key)
+      if (raw === null) return defaultValue
       return JSON.parse(raw) as T
-    } catch {
-      console.warn(`[storage] Failed to parse value for key "${key}". Using default.`)
+    } catch (err) {
+      console.warn(`[storage] Failed to read or parse value for key "${key}". Using default.`, err)
       return defaultValue
     }
   }

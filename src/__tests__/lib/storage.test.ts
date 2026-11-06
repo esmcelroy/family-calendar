@@ -1,29 +1,65 @@
-// @ts-nocheck
-/**
- * Test stubs for LocalStorageAdapter.
- *
- * ⚠️  REQUIRES spec 006 (Vitest + jsdom setup) to run.
- *     All tests are marked `.todo` until that setup is complete.
- */
-import { describe, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { localStorageAdapter, type StorageAdapter } from '@/lib/storage'
 
-// US1 stubs — LocalStorageAdapter behaviour
 describe('LocalStorageAdapter', () => {
-  it.todo('get — key present → returns parsed value typed as T')
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
-  it.todo('get — key absent → returns defaultValue')
+  it('returns a parsed value when the key is present', () => {
+    const value = [{ id: 'event-1', title: 'Dinner' }]
+    window.localStorage.setItem('events', JSON.stringify(value))
 
-  it.todo('set — serialises value and writes to window.localStorage')
+    expect(localStorageAdapter.get('events', [])).toEqual(value)
+  })
 
-  // US2 stubs — error hardening
-  it.todo('get — malformed JSON in storage → returns defaultValue without throwing')
+  it('returns the default value when the key is absent', () => {
+    const defaultValue: string[] = []
 
-  it.todo('set — write to window storage throws QuotaExceededError → silently no-ops (does not throw)')
+    expect(localStorageAdapter.get('missing', defaultValue)).toBe(defaultValue)
+  })
 
-  // US3 stubs — architecture contract
-  it.todo('localStorageAdapter is assignable to StorageAdapter interface')
+  it('serializes values before writing them', () => {
+    const value = { enabled: true }
 
-  it.todo(
-    'injecting a mock StorageAdapter into useLocalStorage routes calls to mock, not window.localStorage',
-  )
+    localStorageAdapter.set('config', value)
+
+    expect(window.localStorage.getItem('config')).toBe(JSON.stringify(value))
+  })
+
+  it('returns the default and warns when stored JSON is malformed', () => {
+    const defaultValue: string[] = []
+    window.localStorage.setItem('events', '{invalid')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(localStorageAdapter.get('events', defaultValue)).toBe(defaultValue)
+    expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it('returns the default and warns when storage reads are denied', () => {
+    const defaultValue: string[] = []
+    vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new DOMException('Access denied', 'SecurityError')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(localStorageAdapter.get('events', defaultValue)).toBe(defaultValue)
+    expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it('does not throw when storage writes fail', () => {
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage full', 'QuotaExceededError')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(() => localStorageAdapter.set('events', [])).not.toThrow()
+    expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it('exposes an adapter satisfying the backend contract', () => {
+    const adapter: StorageAdapter = localStorageAdapter
+
+    expect(adapter).toBe(localStorageAdapter)
+  })
 })

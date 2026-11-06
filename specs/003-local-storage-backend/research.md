@@ -152,12 +152,12 @@ Using `as const` makes the values narrowed string literals, enabling TypeScript 
 
 ## Research Question 7: `@github/spark` Package Removal Scope
 
-**Decision**: Remove only the `useKV` import from `App.tsx`. Do not remove `@github/spark` from `package.json` in this feature.
+**Original decision**: Remove only the `useKV` import from `App.tsx`; defer package removal.
 
-**Rationale**: `grep -r '@github/spark' src/` shows only one import: `useKV` in `App.tsx`. However, the `@github/spark` package may be referenced in configuration files, Vite plugins, or runtime adapters outside `src/`. Removing the package itself is a separate concern (cleanup) that should happen after confirming zero usages across the entire project — outside the scope of this persistence feature.
+**Follow-up**: Portability cleanup removed the remaining `@github/spark` runtime import, Vite plugins, and package dependency after confirming they were not required by application features.
 
 **Alternatives considered**:
-- Remove `@github/spark` from `package.json` immediately — deferred; the success criterion (SC-001) is met by removing the import from `src/`; full package removal is a cleanup task.
+- Keep `@github/spark` for its Vite icon proxy and runtime initialization — rejected; the app builds and tests without those Spark-specific plugins.
 
 ---
 
