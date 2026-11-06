@@ -27,7 +27,7 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     coverage: {
       provider: 'v8',
-      include: ['src/lib/calendar.ts', 'src/lib/utils.ts'],
+      include: ['src/lib/calendar.ts', 'src/lib/ics.ts', 'src/lib/utils.ts'],
       thresholds: {
         lines: 70,
         branches: 60,

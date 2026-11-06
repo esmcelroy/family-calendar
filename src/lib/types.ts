@@ -26,6 +26,26 @@ export interface CalendarEvent {
   sequence?: number
 }
 
+export interface IcsSubscription {
+  id: string
+  url: string
+  name: string
+  color?: string
+  enabled: boolean
+  lastFetchedAt?: string
+  lastFetchError?: string
+}
+
+export interface SubscribedEvent extends CalendarEvent {
+  uid: string
+  recurrenceId?: string
+  sourceSubscriptionId?: string
+  sourceName?: string
+  color?: string
+  icalComponent: string
+  icalTimeZones: string[]
+}
+
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 export type RecurrenceEndType = 'none' | 'date' | 'count'
 
