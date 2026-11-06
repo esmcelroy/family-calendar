@@ -116,7 +116,17 @@ describe.skipIf(!databaseUrl)('shared calendar and user preferences', () => {
       method: 'POST',
       url: '/api/calendar/events',
       headers: { cookie: adminCookie },
-      payload: { title: 'Appointment', date: '2026-11-08', memberIds: [member.id] },
+      payload: {
+        title: 'Appointment',
+        date: '2026-11-08',
+        memberIds: [member.id],
+        recurrence: { frequency: 'weekly', interval: 1, endType: 'none' },
+        seriesExceptions: [{
+          date: '2026-11-15',
+          type: 'modified',
+          overrides: { memberIds: [member.id] },
+        }],
+      },
     })
     const event = eventResponse.json()
 
@@ -152,11 +162,25 @@ describe.skipIf(!databaseUrl)('shared calendar and user preferences', () => {
       headers: { cookie: adminCookie },
     })
     expect(deletedMember.statusCode).toBe(204)
+    const updatedEvent = await pool.query<{ data: Record<string, unknown> }>(
+      'SELECT data FROM calendar_events WHERE id = $1',
+      [event.id],
+    )
+    expect(updatedEvent.rows[0]?.data['memberIds']).toEqual([])
+    expect(updatedEvent.rows[0]?.data['seriesExceptions']).toMatchObject([
+      { overrides: { memberIds: [] } },
+    ])
+    const preferences = await pool.query<{ data: Record<string, unknown> }>(
+      "SELECT data FROM user_preferences WHERE data->'activeFilters' @> $1::jsonb",
+      [JSON.stringify([member.id])],
+    )
+    expect(preferences.rows).toHaveLength(0)
     const events = await app.inject({
       method: 'GET',
       url: '/api/calendar/events',
       headers: { cookie: adminCookie },
     })
+
     expect(events.json().events.find((item: { id: string }) => item.id === event.id).memberIds).toEqual([])
 
     const deletedSubscription = await app.inject({
@@ -165,6 +189,74 @@ describe.skipIf(!databaseUrl)('shared calendar and user preferences', () => {
       headers: { cookie: adminCookie },
     })
     expect(deletedSubscription.statusCode).toBe(204)
+  })
+
+  it('rejects recurrence override references to missing family members', async () => {
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/calendar/events',
+      headers: { cookie: adminCookie },
+      payload: {
+        title: 'Invalid override',
+        date: '2026-11-08',
+        memberIds: [],
+        recurrence: { frequency: 'weekly', interval: 1, endType: 'none' },
+        seriesExceptions: [{
+          date: '2026-11-15',
+          type: 'modified',
+          overrides: { memberIds: ['00000000-0000-4000-8000-000000000001'] },
+        }],
+      },
+    })
+
+    expect(invalid.statusCode).toBe(422)
+    expect(invalid.json()).toMatchObject({ error: { code: 'INVALID_MEMBER_REFERENCE' } })
+  })
+
+  it('removes a deleted member from active filters saved by any account', async () => {
+    const memberResponse = await app.inject({
+      method: 'POST',
+      url: '/api/calendar/members',
+      headers: { cookie: adminCookie },
+      payload: { name: 'Taylor', color: 'blue' },
+    })
+    const member = memberResponse.json()
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/preferences',
+      headers: { cookie: adminCookie },
+      payload: { activeFilters: [member.id] },
+    })
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: { cookie: adminCookie },
+      payload: { username: 'other', password: 'another-strong-password', role: 'member' },
+    })
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'other', password: 'another-strong-password' },
+    })
+    const cookie = login.headers['set-cookie']
+    const otherCookie = Array.isArray(cookie) ? cookie[0] : cookie
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/preferences',
+      headers: { cookie: otherCookie },
+      payload: { activeFilters: [member.id] },
+    })
+
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/calendar/members/${member.id}`,
+      headers: { cookie: adminCookie },
+    })
+
+    const preferences = await pool.query<{ data: Record<string, unknown> }>(
+      "SELECT data FROM user_preferences WHERE data->'activeFilters' <> '[]'::jsonb",
+    )
+    expect(preferences.rows).toHaveLength(0)
   })
 
   it('isolates preferences per account and rejects missing member references', async () => {

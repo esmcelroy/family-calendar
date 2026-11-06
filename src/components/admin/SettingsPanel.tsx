@@ -118,7 +118,7 @@ export function SettingsPanel() {
           </label>
           <label className="grid gap-1">
             Organizer email
-            <input type="email" className="min-h-11 rounded-md border bg-background px-3 py-2" value={settings.organizerEmail ?? ''} onChange={(event) => setSettings((current) => ({ ...current, organizerEmail: event.target.value }))} />
+            <input type="email" className="min-h-11 rounded-md border bg-background px-3 py-2" value={settings.organizerEmail ?? ''} onChange={(event) => setSettings((current) => ({ ...current, organizerEmail: event.target.value.trim() || null }))} />
           </label>
           <label className="grid gap-1">
             SMTP host

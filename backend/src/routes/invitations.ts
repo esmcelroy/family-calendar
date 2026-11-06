@@ -10,6 +10,15 @@ interface InvitationInput {
   recurrenceId?: unknown
 }
 
+interface Recurrence {
+  frequency?: string
+  interval?: number
+  selectedDays?: number[]
+  endType?: string
+  endDate?: string
+  endCount?: number
+}
+
 interface EventData {
   title?: string
   date?: string
@@ -17,6 +26,8 @@ interface EventData {
   endTime?: string
   description?: string
   memberIds?: string[]
+  sequence?: number
+  recurrence?: Recurrence | null
   seriesExceptions?: Array<{
     date: string
     type: 'modified' | 'deleted'
@@ -28,7 +39,15 @@ function escapeIcal(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;')
 }
 
+function escapeIcalParameter(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]/g, ' ')
+}
+
 function formatIcalDateTime(value: Date): string {
+  return value.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '')
+}
+
+function formatIcalTimestamp(value: Date): string {
   return value.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
 }
 
@@ -68,54 +87,111 @@ export function buildInvitationIcs(
   recurrenceId?: string,
   recurrenceTime?: string | null,
   organizer?: { name?: string | null; email?: string | null },
+  attendees: Array<{ name: string | null; email: string }> = [],
 ) {
-  const date = recurrenceId ?? event.date ?? ''
-  const parsedDate = parseIcalDate(date)
-  const lines = [
+  const timestamp = formatIcalTimestamp(new Date())
+  const organizerLine = organizer?.email
+    ? `ORGANIZER${organizer.name ? `;CN="${escapeIcalParameter(organizer.name)}"` : ''}:mailto:${encodeURIComponent(organizer.email).replace(/%40/gi, '@')}`
+    : null
+  const attendeeLines = attendees.map(({ name, email }) =>
+    `ATTENDEE${name ? `;CN="${escapeIcalParameter(name)}"` : ''};ROLE=REQ-PARTICIPANT${method === 'REQUEST' ? ';PARTSTAT=NEEDS-ACTION;RSVP=TRUE' : ''}:mailto:${encodeURIComponent(email).replace(/%40/gi, '@')}`,
+  )
+
+  const component = (data: EventData, detachedDate?: string): string[] => {
+    const date = data.date ?? ''
+    const parsedDate = parseIcalDate(date)
+    const lines = [
+      'BEGIN:VEVENT',
+      `UID:${id}@family-calendar`,
+      `DTSTAMP:${timestamp}`,
+    ]
+    if (data.startTime) {
+      const start = parseIcalDateTime(date, data.startTime)
+      lines.push(`DTSTART:${formatIcalDateTime(start)}`)
+      const end = data.endTime
+        ? parseIcalDateTime(date, data.endTime)
+        : new Date(start.getTime() + 60 * 60 * 1000)
+      if (data.endTime && end <= start) end.setUTCDate(end.getUTCDate() + 1)
+      lines.push(`DTEND:${formatIcalDateTime(end)}`)
+    } else {
+      const end = new Date(parsedDate)
+      end.setUTCDate(end.getUTCDate() + 1)
+      lines.push(`DTSTART;VALUE=DATE:${date.replaceAll('-', '')}`)
+      lines.push(`DTEND;VALUE=DATE:${end.toISOString().slice(0, 10).replaceAll('-', '')}`)
+    }
+
+    const masterStartTime = recurrenceTime === undefined ? event.startTime : recurrenceTime
+    if (detachedDate) {
+      lines.push(masterStartTime
+        ? `RECURRENCE-ID:${formatIcalDateTime(parseIcalDateTime(detachedDate, masterStartTime))}`
+        : `RECURRENCE-ID;VALUE=DATE:${detachedDate.replaceAll('-', '')}`)
+    }
+    if (organizerLine) lines.push(organizerLine)
+    lines.push(...attendeeLines)
+    lines.push(`SUMMARY:${escapeIcal(data.title ?? '')}`, `SEQUENCE:${Number.isInteger(data.sequence) ? data.sequence : sequence}`)
+    if (method === 'CANCEL') lines.push('STATUS:CANCELLED')
+    if (data.description) lines.push(`DESCRIPTION:${escapeIcal(data.description)}`)
+
+    if (!recurrenceId && !detachedDate && data.recurrence) {
+      const recurrence = data.recurrence
+      const frequency = recurrence.frequency?.toUpperCase()
+      if (frequency && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(frequency)) {
+        const parts = [`FREQ=${frequency}`, `INTERVAL=${Math.max(1, recurrence.interval ?? 1)}`]
+        if (recurrence.selectedDays?.length) {
+          const weekdays = recurrence.selectedDays
+            .map((day) => ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][day])
+            .filter((day): day is string => Boolean(day))
+          if (weekdays.length) parts.push(`BYDAY=${weekdays.join(',')}`)
+        }
+        if (recurrence.endType === 'count' && recurrence.endCount) {
+          parts.push(`COUNT=${recurrence.endCount}`)
+        } else if (recurrence.endType === 'date' && recurrence.endDate) {
+          const until = recurrence.endDate.replaceAll('-', '')
+          parts.push(`UNTIL=${until}${event.startTime ? 'T235959' : ''}`)
+        }
+        lines.push(`RRULE:${parts.join(';')}`)
+      }
+      const excludedDates = data.seriesExceptions
+        ?.filter((exception) => exception.type === 'deleted' || exception.type === 'modified')
+        .map(({ date: exceptionDate }) => masterStartTime
+          ? formatIcalDateTime(parseIcalDateTime(exceptionDate, masterStartTime))
+          : exceptionDate.replaceAll('-', ''))
+      if (excludedDates?.length) {
+        lines.push(masterStartTime
+          ? `EXDATE:${excludedDates.join(',')}`
+          : `EXDATE;VALUE=DATE:${excludedDates.join(',')}`)
+      }
+    }
+    lines.push('END:VEVENT')
+    return lines
+  }
+
+  const eventDate = event.date ?? recurrenceId ?? ''
+  const occurrenceEvent = {
+    ...event,
+    date: eventDate,
+    ...(recurrenceId ? { startTime: event.startTime } : {}),
+  }
+  const components = component(occurrenceEvent, recurrenceId)
+  if (!recurrenceId) {
+    for (const exception of event.seriesExceptions ?? []) {
+      if (exception.type !== 'modified') continue
+      components.push(...component({
+        ...event,
+        date: exception.date,
+        ...exception.overrides,
+      }, exception.date))
+    }
+  }
+  return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Family Calendar//EN',
     'CALSCALE:GREGORIAN',
     `METHOD:${method}`,
-    'BEGIN:VEVENT',
-    `UID:${id}@family-calendar`,
-    `DTSTAMP:${formatIcalDateTime(new Date())}`,
-  ]
-  if (event.startTime) {
-    const start = parseIcalDateTime(date, event.startTime)
-    lines.push(`DTSTART:${formatIcalDateTime(start)}`)
-    const end = event.endTime
-      ? parseIcalDateTime(date, event.endTime)
-      : new Date(start.getTime() + 60 * 60 * 1000)
-    if (event.endTime && end <= start) end.setUTCDate(end.getUTCDate() + 1)
-    lines.push(`DTEND:${formatIcalDateTime(end)}`)
-  } else {
-    const end = new Date(parsedDate)
-    end.setUTCDate(end.getUTCDate() + 1)
-    lines.push(`DTSTART;VALUE=DATE:${date.replaceAll('-', '')}`)
-    lines.push(`DTEND;VALUE=DATE:${end.toISOString().slice(0, 10).replaceAll('-', '')}`)
-  }
-  if (recurrenceId) {
-    const recurrenceDate = parseIcalDate(recurrenceId)
-    const originalStartTime = recurrenceTime === undefined ? event.startTime : recurrenceTime
-    lines.push(originalStartTime
-      ? `RECURRENCE-ID:${formatIcalDateTime(parseIcalDateTime(recurrenceId, originalStartTime))}`
-      : `RECURRENCE-ID;VALUE=DATE:${recurrenceDate.toISOString().slice(0, 10).replaceAll('-', '')}`)
-  }
-  if (organizer?.email) {
-    const organizerName = organizer.name
-      ? `;CN="${organizer.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-      : ''
-    const mailtoAddress = encodeURIComponent(organizer.email).replace(/%40/gi, '@')
-    lines.push(`ORGANIZER${organizerName}:mailto:${mailtoAddress}`)
-  }
-  lines.push(
-    `SUMMARY:${escapeIcal(event.title ?? '')}`,
-    `SEQUENCE:${sequence}`,
-  )
-  if (event.description) lines.push(`DESCRIPTION:${escapeIcal(event.description)}`)
-  lines.push('END:VEVENT', 'END:VCALENDAR')
-  return lines.join('\r\n')
+    ...components,
+    'END:VCALENDAR',
+  ].join('\r\n')
 }
 
 export function deliveryResults(recipients: string[], accepted: string[]) {
@@ -162,11 +238,14 @@ export function registerInvitationRoutes(
         ...(exception?.type === 'modified' ? exception.overrides : {}),
       }
       const memberIds = eventData.memberIds ?? []
-      const members = await pool.query<{ email: string | null }>(
-        `SELECT data->>'email' AS email FROM family_members WHERE id = ANY($1::uuid[])`,
+      const members = await pool.query<{ name: string; email: string | null }>(
+        `SELECT data->>'name' AS name, data->>'email' AS email FROM family_members WHERE id = ANY($1::uuid[])`,
         [memberIds],
       )
       const recipients = [...new Set(members.rows.map((row) => row.email).filter((email): email is string => Boolean(email)))]
+      const attendees = members.rows
+        .filter((member): member is { name: string; email: string } => Boolean(member.email))
+        .map(({ name, email }) => ({ name, email }))
       const settings = await loadSmtpSettings(pool, encryptionKey)
       const familySettings = await loadFamilySettings(pool)
       if (!settings) {
@@ -197,6 +276,7 @@ export function registerInvitationRoutes(
                 ? familySettings.data['organizerEmail']
                 : null,
             },
+            attendees,
           ),
         },
       }

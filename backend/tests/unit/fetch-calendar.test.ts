@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { fetchCalendarSafely } from '../../src/feed/fetch-calendar.js'
+import { describe, expect, it, vi } from 'vitest'
+import { createPinnedLookup, fetchCalendarSafely, raceWithAbort } from '../../src/feed/fetch-calendar.js'
 
 describe('bounded ICS subscription fetching', () => {
   it.each([
@@ -13,5 +13,26 @@ describe('bounded ICS subscription fetching', () => {
 
   it('rejects non-HTTPS subscriptions before resolving or connecting', async () => {
     await expect(fetchCalendarSafely('http://calendar.example.org/family.ics')).rejects.toThrow(/HTTPS/i)
+  })
+
+  it('returns the pinned DNS address in the shape requested by Node', () => {
+    const lookup = createPinnedLookup('calendar.example.org', { address: '203.0.113.1', family: 4 })
+    const allResults = vi.fn()
+    const singleResult = vi.fn()
+
+    lookup('calendar.example.org', { all: true }, allResults)
+    lookup('calendar.example.org', { all: false }, singleResult)
+
+    expect(allResults).toHaveBeenCalledWith(null, [{ address: '203.0.113.1', family: 4 }])
+    expect(singleResult).toHaveBeenCalledWith(null, '203.0.113.1', 4)
+  })
+
+  it('aborts in-flight DNS work when the overall deadline expires', async () => {
+    const controller = new AbortController()
+    const pending = new Promise<string>(() => undefined)
+    const result = raceWithAbort(pending, controller.signal)
+    controller.abort()
+
+    await expect(result).rejects.toThrow(/timed out/i)
   })
 })

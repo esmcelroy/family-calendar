@@ -15,6 +15,8 @@ interface Subscription {
   source_url: string
 }
 
+const FEED_CREDENTIAL_LOCK = 129202612
+
 function urlForRequest(request: FastifyRequest, token: string) {
   return `${request.protocol}://${request.headers.host}/api/feeds/${encodeURIComponent(token)}.ics`
 }
@@ -63,6 +65,7 @@ export function registerFeedRoutes(
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      await client.query('SELECT pg_advisory_xact_lock($1)', [FEED_CREDENTIAL_LOCK])
       await client.query('UPDATE feed_credentials SET revoked_at = NOW(), rotated_at = NOW() WHERE revoked_at IS NULL')
       await client.query(
         `INSERT INTO feed_credentials (id, token_digest, token_ciphertext, created_by_user_id)
@@ -84,7 +87,18 @@ export function registerFeedRoutes(
     if (!ensureSameOrigin(request, reply)) return
     const user = await requireAdmin(pool, request, reply, sessionSecret)
     if (!user) return
-    await pool.query('UPDATE feed_credentials SET revoked_at = NOW() WHERE revoked_at IS NULL')
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SELECT pg_advisory_xact_lock($1)', [FEED_CREDENTIAL_LOCK])
+      await client.query('UPDATE feed_credentials SET revoked_at = NOW() WHERE revoked_at IS NULL')
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
+      throw error
+    } finally {
+      client.release()
+    }
     cache.clear()
     return reply.code(204).send()
   })

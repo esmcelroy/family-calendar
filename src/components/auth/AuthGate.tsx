@@ -67,6 +67,7 @@ export function AuthGate({
             Log out
           </Button>
         </div>
+        {error && <p role="alert" className="px-4 py-2 text-sm text-destructive">{error}</p>}
         {children}
       </div>
     </>

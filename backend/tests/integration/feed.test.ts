@@ -127,4 +127,16 @@ describe.skipIf(!databaseUrl)('live merged calendar feed', () => {
       headers: { cookie: adminCookie },
     })).json()).toEqual({ enabled: false })
   })
+
+  it('serializes concurrent token rotations so only one credential remains active', async () => {
+    const rotations = await Promise.all(Array.from({ length: 5 }, () =>
+      app.inject({ method: 'POST', url: '/api/admin/feed', headers: { cookie: adminCookie } }),
+    ))
+    expect(rotations.every((response) => response.statusCode === 200)).toBe(true)
+
+    const activeCredentials = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM feed_credentials WHERE revoked_at IS NULL',
+    )
+    expect(activeCredentials.rows[0]?.count).toBe('1')
+  })
 })

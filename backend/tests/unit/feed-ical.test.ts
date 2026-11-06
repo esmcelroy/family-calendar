@@ -73,6 +73,22 @@ describe('merged calendar feed', () => {
     expect(allDayCalendar).toContain('EXDATE;VALUE=DATE:20261113')
   })
 
+  it('uses exclusive end dates for all-day and overnight events', () => {
+    const calendar = buildMergedCalendar([
+      { id: 'all-day', data: { title: 'All day', date: '2026-11-06', endTime: '12:00' } },
+      {
+        id: 'overnight',
+        data: { title: 'Overnight', date: '2026-11-06', startTime: '23:30', endTime: '00:15' },
+      },
+    ], [])
+
+    expect(calendar).toContain('DTSTART;VALUE=DATE:20261106')
+    expect(calendar).toContain('DTEND;VALUE=DATE:20261107')
+    expect(calendar).not.toContain('DTEND:20261106T120000')
+    expect(calendar).toContain('DTSTART:20261106T233000')
+    expect(calendar).toContain('DTEND:20261107T001500')
+  })
+
   it('preserves imported timezone definitions referenced by subscription events', () => {
     const calendar = buildMergedCalendar([], [timezoneCalendar, timezoneCalendar])
 

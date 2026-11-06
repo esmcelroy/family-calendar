@@ -205,12 +205,43 @@ function normalizeSubscription(input: SubscriptionInput): Record<string, unknown
 }
 
 async function memberReferencesExist(pool: Pool, memberIds: string[]): Promise<boolean> {
-  if (memberIds.length === 0) return true
+  const uniqueIds = [...new Set(memberIds)]
+  if (uniqueIds.length === 0) return true
   const { rows } = await pool.query<{ id: string }>(
     'SELECT id FROM family_members WHERE id = ANY($1::uuid[])',
-    [memberIds],
+    [uniqueIds],
   )
-  return rows.length === memberIds.length
+  return rows.length === uniqueIds.length
+}
+
+function eventMemberReferences(event: Record<string, unknown>): string[] {
+  const references = Array.isArray(event['memberIds']) ? [...event['memberIds']] : []
+  const exceptions = Array.isArray(event['seriesExceptions']) ? event['seriesExceptions'] : []
+  for (const exception of exceptions) {
+    if (!isRecord(exception) || exception['type'] !== 'modified' || !isRecord(exception['overrides'])) continue
+    const overrideMembers = exception['overrides']['memberIds']
+    if (Array.isArray(overrideMembers)) references.push(...overrideMembers)
+  }
+  return references.filter((memberId): memberId is string => typeof memberId === 'string')
+}
+
+function withoutMemberReference(data: Record<string, unknown>, memberId: string): Record<string, unknown> {
+  const memberIds = Array.isArray(data['memberIds'])
+    ? data['memberIds'].filter((value) => value !== memberId)
+    : []
+  const exceptions = Array.isArray(data['seriesExceptions'])
+    ? data['seriesExceptions'].map((exception) => {
+      if (!isRecord(exception) || exception['type'] !== 'modified' || !isRecord(exception['overrides'])) return exception
+      const overrides = exception['overrides']
+      return {
+        ...exception,
+        overrides: Array.isArray(overrides['memberIds'])
+          ? { ...overrides, memberIds: overrides['memberIds'].filter((value) => value !== memberId) }
+          : overrides,
+      }
+    })
+    : data['seriesExceptions']
+  return { ...data, memberIds, ...(exceptions ? { seriesExceptions: exceptions } : {}) }
 }
 
 async function persistEvent(pool: Pool, event: Record<string, unknown>, id: string, create: boolean) {
@@ -272,7 +303,7 @@ export function registerCalendarRoutes(app: FastifyInstance, pool: Pool, session
     const id = randomUUID()
     const event = normalizeEvent(request.body ?? {}, id)
     if (!event) return sendApiError(reply, 422, 'INVALID_EVENT', 'Enter a valid calendar event.')
-    if (!(await memberReferencesExist(pool, event['memberIds'] as string[]))) {
+    if (!(await memberReferencesExist(pool, eventMemberReferences(event)))) {
       return sendApiError(reply, 422, 'INVALID_MEMBER_REFERENCE', 'Choose existing family members for this event.')
     }
     await persistEvent(pool, event, id, true)
@@ -287,7 +318,7 @@ export function registerCalendarRoutes(app: FastifyInstance, pool: Pool, session
     if (!UUID_PATTERN.test(id)) return sendApiError(reply, 404, 'NOT_FOUND', 'Event not found.')
     const event = normalizeEvent(request.body ?? {}, id)
     if (!event) return sendApiError(reply, 422, 'INVALID_EVENT', 'Enter a valid calendar event.')
-    if (!(await memberReferencesExist(pool, event['memberIds'] as string[]))) {
+    if (!(await memberReferencesExist(pool, eventMemberReferences(event)))) {
       return sendApiError(reply, 422, 'INVALID_MEMBER_REFERENCE', 'Choose existing family members for this event.')
     }
     if (!(await persistEvent(pool, event, id, false))) return sendApiError(reply, 404, 'NOT_FOUND', 'Event not found.')
@@ -355,13 +386,25 @@ export function registerCalendarRoutes(app: FastifyInstance, pool: Pool, session
       }
       const events = await client.query<{ id: string; data: Record<string, unknown> }>('SELECT id, data FROM calendar_events')
       for (const event of events.rows) {
-        const eventMemberIds = event.data['memberIds']
-        const memberIds = Array.isArray(eventMemberIds) ? eventMemberIds.filter((memberId) => memberId !== id) : []
         await client.query(
-          'UPDATE calendar_events SET data = jsonb_set(data, \'{memberIds}\', $2::jsonb), updated_at = NOW() WHERE id = $1',
-          [event.id, JSON.stringify(memberIds)],
+          'UPDATE calendar_events SET data = $2::jsonb, updated_at = NOW() WHERE id = $1',
+          [event.id, JSON.stringify(withoutMemberReference(event.data, id))],
         )
       }
+      await client.query(
+        `UPDATE user_preferences
+         SET data = jsonb_set(
+           data,
+           '{activeFilters}',
+           COALESCE((
+             SELECT jsonb_agg(to_jsonb(filter_id))
+             FROM jsonb_array_elements_text(COALESCE(data->'activeFilters', '[]'::jsonb)) AS filters(filter_id)
+             WHERE filter_id <> $1
+           ), '[]'::jsonb),
+           true
+         ), updated_at = NOW()`,
+        [id],
+      )
       await client.query('DELETE FROM family_members WHERE id = $1', [id])
       await client.query('COMMIT')
     } catch (error) {

@@ -81,6 +81,11 @@ export function registerAuthRoutes(
       return sendApiError(reply, 422, 'INVALID_ACCOUNT', 'Enter a valid username and a password of at least 8 characters.')
     }
 
+    const setup = await pool.query<{ exists: boolean }>('SELECT EXISTS (SELECT 1 FROM users) AS exists')
+    if (setup.rows[0]?.exists) {
+      return sendApiError(reply, 409, 'BOOTSTRAP_COMPLETE', 'Administrator setup has already been completed.')
+    }
+
     const passwordHash = await hashPassword(password)
     const client = await pool.connect()
     try {

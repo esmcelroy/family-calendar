@@ -53,6 +53,20 @@ describe('authentication screens', () => {
     expect(document.activeElement).toHaveAttribute('tabindex', '-1')
     fireEvent.click(screen.getByRole('button', { name: /log out/i }))
     expect(onLogout).toHaveBeenCalledOnce()
+
+    rerender(
+      <AuthGate
+        user={user}
+        bootstrapRequired={false}
+        loading={false}
+        onLogout={onLogout}
+        error="Unable to sign out."
+      >
+        <p>Private calendar</p>
+      </AuthGate>,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to sign out.')
+    expect(screen.getByText('Private calendar')).toBeInTheDocument()
   })
 
   it('shows a loading state instead of exposing protected content during session checks', () => {

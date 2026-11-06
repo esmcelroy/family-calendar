@@ -28,8 +28,19 @@ function eventComponent(event: SharedEvent, overrides: Record<string, unknown> =
       : `DTSTART;VALUE=DATE:${date}`,
     `SUMMARY:${escapeText(data['title'])}`,
   ]
-  if (typeof data['endTime'] === 'string') {
-    lines.push(`DTEND:${date}T${data['endTime'].replace(':', '')}00`)
+  if (typeof data['startTime'] === 'string' && typeof data['endTime'] === 'string') {
+    const endDate = data['endTime'] <= data['startTime']
+      ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T00:00:00Z`)
+      : null
+    endDate?.setUTCDate(endDate.getUTCDate() + 1)
+    const endDateValue = endDate
+      ? endDate.toISOString().slice(0, 10).replaceAll('-', '')
+      : date
+    lines.push(`DTEND:${endDateValue}T${data['endTime'].replace(':', '')}00`)
+  } else if (typeof data['startTime'] !== 'string') {
+    const endDate = new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T00:00:00Z`)
+    endDate.setUTCDate(endDate.getUTCDate() + 1)
+    lines.push(`DTEND;VALUE=DATE:${endDate.toISOString().slice(0, 10).replaceAll('-', '')}`)
   }
   if (typeof data['description'] === 'string' && data['description']) {
     lines.push(`DESCRIPTION:${escapeText(data['description'])}`)
