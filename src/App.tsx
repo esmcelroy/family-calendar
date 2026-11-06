@@ -14,6 +14,8 @@ import { Plus, CaretLeft, CaretRight, Users, CalendarBlank, Funnel, Download } f
 import { Toaster, toast } from 'sonner'
 import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { configuredRuntimeMode } from '@/lib/runtime-mode'
+import { ServerApplication } from '@/components/auth/ServerApplication'
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -22,7 +24,7 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function App() {
+function LocalCalendarApp() {
   const [events, setEvents] = useLocalStorage<CalendarEvent[]>(STORAGE_KEYS.events, [])
   const [members, setMembers] = useLocalStorage<FamilyMember[]>(STORAGE_KEYS.members, [])
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -464,6 +466,11 @@ function App() {
       <Toaster position="bottom-right" />
     </div>
   )
+}
+
+function App() {
+  if (configuredRuntimeMode === 'server') return <ServerApplication />
+  return <LocalCalendarApp />
 }
 
 export default App

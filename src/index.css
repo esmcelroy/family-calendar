@@ -36,8 +36,8 @@
   --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(1 0 0);
   
-  --border: oklch(0.88 0.01 85);
-  --input: oklch(0.88 0.01 85);
+  --border: oklch(0.62 0.01 85);
+  --input: oklch(0.62 0.01 85);
   --ring: oklch(0.45 0.15 330);
   
   --radius: 0.75rem;

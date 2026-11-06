@@ -1,0 +1,32 @@
+{
+  "name": "@family-calendar/backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "migrate": "node-pg-migrate up -m migrations",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.2.0",
+    "argon2": "^0.44.0",
+    "fastify": "^5.8.0",
+    "node-ical": "^0.22.1",
+    "node-pg-migrate": "^8.0.4",
+    "nodemailer": "^8.0.5",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/nodemailer": "^8.0.0",
+    "@types/pg": "^8.15.6",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.4"
+  }
+}

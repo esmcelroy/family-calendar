@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { CalendarEvent, FamilyMember, RecurringEditScope } from '@/lib/types'
 import { formatRecurrencePattern, formatTime } from '@/lib/calendar'
@@ -46,6 +46,9 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-semibold pr-8">{event.title}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Event details and actions for {event.title}.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div>
@@ -112,7 +115,7 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="min-h-11 gap-2"
               onClick={() => window.open(buildGCalUrl(event), '_blank')}
             >
               <GoogleLogo size={16} />
@@ -121,13 +124,13 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
             <div className="flex gap-2 ml-auto">
               <Button
                 variant="outline"
-                className="gap-2"
+                className="min-h-11 gap-2"
                 onClick={() => (isRecurringInstance ? setShowDeleteScope(true) : setShowDeleteConfirm(true))}
               >
                 <Trash size={18} />
                 Delete
               </Button>
-              <Button className="gap-2" onClick={() => (isRecurringInstance ? setShowEditScope(true) : onEdit('all'))}>
+              <Button className="min-h-11 gap-2" onClick={() => (isRecurringInstance ? setShowEditScope(true) : onEdit('all'))}>
                 <Pencil size={18} />
                 Edit
               </Button>
@@ -145,8 +148,8 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
             </AlertDialogDescription>
           </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => handleDelete('all')}>Delete</AlertDialogAction>
+              <AlertDialogCancel className="min-h-11">Cancel</AlertDialogCancel>
+              <AlertDialogAction className="min-h-11" onClick={() => handleDelete('all')}>Delete</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
@@ -160,10 +163,10 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setShowEditScope(false); onEdit('this') }}>This event</AlertDialogAction>
-            <AlertDialogAction onClick={() => { setShowEditScope(false); onEdit('following') }}>This and following</AlertDialogAction>
-            <AlertDialogAction onClick={() => { setShowEditScope(false); onEdit('all') }}>All events</AlertDialogAction>
+            <AlertDialogCancel className="min-h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="min-h-11" onClick={() => { setShowEditScope(false); onEdit('this') }}>This event</AlertDialogAction>
+            <AlertDialogAction className="min-h-11" onClick={() => { setShowEditScope(false); onEdit('following') }}>This and following</AlertDialogAction>
+            <AlertDialogAction className="min-h-11" onClick={() => { setShowEditScope(false); onEdit('all') }}>All events</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -177,10 +180,10 @@ export function EventDetailsDialog({ event, open, onOpenChange, onEdit, onDelete
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleDelete('this')}>This event</AlertDialogAction>
-            <AlertDialogAction onClick={() => handleDelete('following')}>This and following</AlertDialogAction>
-            <AlertDialogAction onClick={() => handleDelete('all')}>All events</AlertDialogAction>
+            <AlertDialogCancel className="min-h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="min-h-11" onClick={() => handleDelete('this')}>This event</AlertDialogAction>
+            <AlertDialogAction className="min-h-11" onClick={() => handleDelete('following')}>This and following</AlertDialogAction>
+            <AlertDialogAction className="min-h-11" onClick={() => handleDelete('all')}>All events</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>

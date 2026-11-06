@@ -13,6 +13,9 @@
         "lint": "eslint .",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
+        "test:backend": "npm --prefix backend test",
+        "build:backend": "npm --prefix backend run build",
+        "start:backend": "npm --prefix backend start",
         "optimize": "vite optimize",
         "preview": "vite preview"
     },

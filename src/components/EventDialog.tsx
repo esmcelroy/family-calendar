@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,7 +13,7 @@ import { Warning } from '@phosphor-icons/react'
 interface EventDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (event: Omit<CalendarEvent, 'id'>) => void
+  onSave: (event: Omit<CalendarEvent, 'id'>) => void | Promise<void>
   selectedDate: Date | null
   members: FamilyMember[]
   editEvent?: CalendarEvent | null
@@ -42,8 +42,11 @@ export function EventDialog({
   const [endType, setEndType] = useState<RecurrenceEndType>('none')
   const [endDate, setEndDate] = useState('')
   const [endCount, setEndCount] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
+    setSaveError(null)
     if (editEvent) {
       setTitle(editEvent.title)
       setDate(editEvent.date)
@@ -75,7 +78,7 @@ export function EventDialog({
     }
   }, [editEvent, selectedDate, open])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim() || !date) return
 
     const parsedInterval = Math.max(1, parseInt(interval, 10) || 1)
@@ -93,19 +96,26 @@ export function EventDialog({
         }
       : undefined
 
-    onSave({
-      title: title.trim(),
-      date,
-      startTime: startTime || undefined,
-      endTime: endTime || undefined,
-      description: description.trim() || undefined,
-      memberIds: selectedMembers,
-      recurrence,
-      seriesId: recurrence ? (editEvent?.seriesId || editEvent?.id) : undefined,
-      seriesExceptions: recurrence ? (editEvent?.seriesExceptions || []) : undefined,
-    })
-
-    onOpenChange(false)
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave({
+        title: title.trim(),
+        date,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+        description: description.trim() || undefined,
+        memberIds: selectedMembers,
+        recurrence,
+        seriesId: recurrence ? (editEvent?.seriesId || editEvent?.id) : undefined,
+        seriesExceptions: recurrence ? (editEvent?.seriesExceptions || []) : undefined,
+      })
+      onOpenChange(false)
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Unable to save this event.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const toggleMember = (memberId: string) => {
@@ -125,21 +135,26 @@ export function EventDialog({
           <DialogTitle className="text-2xl font-semibold">
             {editEvent ? 'Edit Event' : 'Add Event'}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Enter the event details, family members, and recurrence settings.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
           <div className="grid gap-2">
             <Label htmlFor="title">Event Title</Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              className="min-h-11"
               placeholder="Family dinner, Soccer practice..."
             />
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="date">Date</Label>
-            <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input id="date" type="date" className="min-h-11" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -148,6 +163,7 @@ export function EventDialog({
               <Input
                 id="start-time"
                 type="time"
+                className="min-h-11"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
               />
@@ -157,6 +173,7 @@ export function EventDialog({
               <Input
                 id="end-time"
                 type="time"
+                className="min-h-11"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
               />
@@ -175,7 +192,7 @@ export function EventDialog({
                     type="button"
                     onClick={() => toggleMember(member.id)}
                     aria-pressed={selectedMembers.includes(member.id)}
-                    className="px-3 py-1.5 rounded-full text-sm font-medium transition-all"
+                    className="min-h-11 min-w-11 px-3 py-1.5 rounded-full text-sm font-medium transition-all"
                     style={{
                       backgroundColor: selectedMembers.includes(member.id)
                         ? member.color
@@ -228,7 +245,7 @@ export function EventDialog({
                 checked={isRecurring}
                 onChange={(e) => setIsRecurring(e.target.checked)}
                 disabled={disableRecurrenceEditing}
-                className="h-4 w-4"
+                className="h-5 w-5"
               />
             </div>
 
@@ -241,7 +258,7 @@ export function EventDialog({
                     value={frequency}
                     onChange={(e) => setFrequency(e.target.value as RecurrenceFrequency)}
                     disabled={disableRecurrenceEditing}
-                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="min-h-11 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -259,6 +276,7 @@ export function EventDialog({
                     value={interval}
                     onChange={(e) => setInterval(e.target.value)}
                     disabled={disableRecurrenceEditing}
+                    className="min-h-11"
                   />
                 </div>
 
@@ -273,7 +291,7 @@ export function EventDialog({
                           onClick={() => toggleDay(dayIndex)}
                           disabled={disableRecurrenceEditing}
                           aria-pressed={selectedDays.includes(dayIndex)}
-                          className="px-3 py-1 rounded border text-sm"
+                          className="min-h-11 min-w-11 px-3 py-1 rounded border text-sm"
                         >
                           {day}
                         </button>
@@ -289,7 +307,7 @@ export function EventDialog({
                     value={endType}
                     onChange={(e) => setEndType(e.target.value as RecurrenceEndType)}
                     disabled={disableRecurrenceEditing}
-                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="min-h-11 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="none">Never (2-year horizon)</option>
                     <option value="date">On date</option>
@@ -303,6 +321,7 @@ export function EventDialog({
                     <Input
                       id="recurrence-end-date"
                       type="date"
+                      className="min-h-11"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                       disabled={disableRecurrenceEditing}
@@ -320,6 +339,7 @@ export function EventDialog({
                       value={endCount}
                       onChange={(e) => setEndCount(e.target.value)}
                       disabled={disableRecurrenceEditing}
+                      className="min-h-11"
                     />
                   </div>
                 )}
@@ -328,11 +348,11 @@ export function EventDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" className="min-h-11" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!title.trim() || !date}>
-            {editEvent ? 'Save Changes' : 'Add Event'}
+          <Button className="min-h-11" onClick={() => void handleSave()} disabled={saving || !title.trim() || !date}>
+            {saving ? 'Saving…' : editEvent ? 'Save Changes' : 'Add Event'}
           </Button>
         </DialogFooter>
       </DialogContent>
